@@ -34,9 +34,18 @@ export default function SignIn() {
     setIsLoading(true)
     
     // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 2000))
+    await new Promise(resolve => setTimeout(resolve, 1000))
     
-    console.log('Sign in attempt:', { email, password, rememberMe })
+    // Check hardcoded credentials
+    if (email === 'adi-admin@automated-data.io' && password === 'Adi123456') {
+      console.log('Sign in successful')
+      // Redirect to MainForm page
+      window.location.href = '/mainform'
+    } else {
+      console.log('Invalid credentials')
+      alert('Invalid email or password')
+    }
+    
     setIsLoading(false)
   }
 
