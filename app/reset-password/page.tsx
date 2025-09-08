@@ -81,11 +81,16 @@ export default function ResetPassword() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    console.log('🚀 PASSWORD RESET FORM SUBMISSION STARTED')
+    console.log('Form data:', { firstName, lastName, email, newPassword: '***hidden***' })
+    console.log('Link key:', linkKey)
     
     if (!validateForm()) {
+      console.log('❌ Form validation failed')
       return
     }
 
+    console.log('✅ Form validation passed, proceeding with password reset...')
     setIsLoading(true)
 
     try {
@@ -94,20 +99,30 @@ export default function ResetPassword() {
         throw new Error('API base URL not configured')
       }
 
-      // API call to reset password (you'll need to implement this endpoint)
-      const response = await fetch(`${baseUrl}/reset_password`, {
+      // Convert password to base64 before sending
+      const base64Password = btoa(newPassword)
+      console.log('🔐 Original password:', newPassword)
+      console.log('🔐 Base64 password:', base64Password)
+      
+      // API call to reset password using reset_password_v2 endpoint
+      const requestUrl = `${baseUrl}/reset_password_v2`
+      const requestBody = {
+        first_name: firstName,
+        last_name: lastName,
+        email: email,
+        new_password: base64Password, // Convert password to base64
+        link_key: linkKey
+      }
+      
+      console.log('📡 Making password reset API call to:', requestUrl)
+      console.log('📡 Request body:', requestBody)
+      
+      const response = await fetch(requestUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          link_key: linkKey,
-          email: email,
-          first_name: firstName,
-          last_name: lastName,
-          new_password: btoa(newPassword), // base64 encode password
-          confirm_password: btoa(confirmPassword) // base64 encode confirm password
-        })
+        body: JSON.stringify(requestBody)
       })
 
       if (!response.ok) {
@@ -115,14 +130,17 @@ export default function ResetPassword() {
       }
 
       const responseData = await response.json()
-      console.log('Password reset response:', responseData)
+      console.log('✅ Password reset response:', responseData)
+      console.log('✅ Response type:', typeof responseData)
+      console.log('✅ Response keys:', Object.keys(responseData || {}))
 
       // Clear session storage
       sessionStorage.removeItem('passwordResetLinkKey')
       sessionStorage.removeItem('passwordResetEmail')
 
       // Show success message and redirect to signin
-      alert('Password reset successful! Please sign in with your new password.')
+      console.log('🎉 Password reset successful! Redirecting to sign-in page.')
+      alert('Password reset successful! You can now sign in with your new password.')
       window.location.href = '/signin'
 
     } catch (error) {
