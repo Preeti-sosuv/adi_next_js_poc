@@ -45,10 +45,6 @@ export const theme = createTheme({
       default: '#FEF7FF',
       paper: '#FFFBFE',
     },
-    surface: {
-      main: '#FFFBFE',
-      variant: '#E7E0EC',
-    },
     text: {
       primary: '#1C1B1F',
       secondary: '#49454F',

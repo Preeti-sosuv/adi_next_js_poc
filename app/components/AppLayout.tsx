@@ -42,8 +42,13 @@ export default function AppLayout({ children }: AppLayoutProps) {
   }
 
   const handleLogout = () => {
-    handleProfileMenuClose()
-    window.location.href = '/signin'
+    // Import clearAuthData dynamically to avoid issues
+    import('../utils/auth').then(({ clearAuthData }) => {
+      clearAuthData()
+      handleProfileMenuClose()
+      console.log('User logged out, clearing auth data')
+      window.location.href = '/signin'
+    })
   }
 
   const menuItems = [

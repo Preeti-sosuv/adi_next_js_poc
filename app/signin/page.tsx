@@ -55,9 +55,9 @@ export default function SignIn() {
     console.log('🔐 isAuthenticated() result:', authStatus)
     
     if (authStatus) {
-      console.log('⚠️ User already authenticated, redirecting to main form')
+      console.log('⚠️ User already authenticated, redirecting to ask-ai')
       console.log('⚠️ This might be preventing the sign-in API call!')
-      window.location.href = '/mainform'
+      window.location.href = '/ask-ai'
     }
   }, [])
 
@@ -179,24 +179,25 @@ export default function SignIn() {
       console.log('🔍 responseData.result?.valid:', responseData.result?.valid)
       console.log('🔍 responseData.result?.link_key:', responseData.result?.link_key)
       console.log('🔍 responseData.result?.message:', responseData.result?.message)
+      console.log('🔍 responseData.result?.password_reset:', responseData.result?.password_reset)
       
       if (!token && responseData.result?.valid === true && responseData.result?.link_key) {
         console.log('✅ API validation successful, received link_key:', responseData.result.link_key)
         
-        // Check if this is a first-time login requiring password reset
+        // Check if this is a first-time login requiring password creation
         if (responseData.result?.message === "Create new password!") {
-          console.log('🔑 First-time login detected, redirecting to password reset')
+          console.log('🔑 First-time login detected, redirecting to create password')
           
-          // Store link_key temporarily for password reset process
+          // Store link_key temporarily for password creation process
           sessionStorage.setItem('passwordResetLinkKey', responseData.result.link_key)
           sessionStorage.setItem('passwordResetEmail', email)
           
-          // Redirect to password reset form (don't set token yet)
-          window.location.href = '/reset-password'
+          // Redirect to create password form (don't set token yet)
+          window.location.href = '/create-password'
           return
         }
         
-        // Only set token if not redirecting to password reset
+        // Only set token if not redirecting to password creation
         token = responseData.result.link_key
       }
       
@@ -220,8 +221,8 @@ export default function SignIn() {
           console.log('API Message:', responseData.result.message)
         }
         
-        // Redirect to MainForm page
-        window.location.href = '/mainform'
+        // Redirect to Ask AI page
+        window.location.href = '/ask-ai'
       } else {
         console.error('No token found in response:', responseData)
         

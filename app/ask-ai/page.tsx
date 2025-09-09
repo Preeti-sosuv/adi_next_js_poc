@@ -13,12 +13,22 @@ import {
   Psychology,
   Send,
 } from '@mui/icons-material'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { isAuthenticated } from '../utils/auth'
 import AppLayout from '../components/AppLayout'
 
 export default function AskAI() {
   const [question, setQuestion] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+
+  // Check authentication on component mount
+  useEffect(() => {
+    if (!isAuthenticated()) {
+      console.log('User not authenticated, redirecting to signin')
+      window.location.href = '/signin'
+      return
+    }
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

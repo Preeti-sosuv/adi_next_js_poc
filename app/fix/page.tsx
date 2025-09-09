@@ -21,9 +21,20 @@ import {
   CheckCircle,
   Info,
 } from '@mui/icons-material'
+import { useEffect } from 'react'
+import { isAuthenticated } from '../utils/auth'
 import AppLayout from '../components/AppLayout'
 
 export default function Fix() {
+  // Check authentication on component mount
+  useEffect(() => {
+    if (!isAuthenticated()) {
+      console.log('User not authenticated, redirecting to signin')
+      window.location.href = '/signin'
+      return
+    }
+  }, [])
+  
   // Placeholder data for FIX messages
   const placeholderMessages = [
     {
