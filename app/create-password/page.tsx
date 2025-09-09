@@ -108,7 +108,6 @@ export default function CreatePassword() {
 
       // Convert password to base64 (matching login flow)
       const base64Password = btoa(newPassword)
-      const base64ConfirmPassword = btoa(confirmPassword)
       console.log('🔐 Password converted to base64')
 
       const requestUrl = `${baseUrl}/reset_password_v2`
@@ -117,15 +116,13 @@ export default function CreatePassword() {
         email: email,
         first_name: firstName,
         last_name: lastName,
-        new_password: base64Password,
-        confirm_password: base64ConfirmPassword
+        new_password: base64Password
       }
 
       console.log('🔄 Making reset password API call to:', requestUrl)
       console.log('🔄 Request body:', {
         ...requestBody,
-        new_password: '[REDACTED]',
-        confirm_password: '[REDACTED]'
+        new_password: '[REDACTED]'
       })
 
       // API call to create password
