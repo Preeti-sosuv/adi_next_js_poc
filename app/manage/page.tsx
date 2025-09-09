@@ -16,7 +16,9 @@ export default function Manage() {
   }, [])
   return (
     <AppLayout>
-      <ManageTab />
+      <div style={{ margin: 0, padding: 0 }}>
+        <ManageTab />
+      </div>
     </AppLayout>
   )
 }

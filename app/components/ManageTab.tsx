@@ -567,7 +567,7 @@ export default function ManageTab() {
   }
 
   return (
-    <Box sx={{ display: 'flex', height: '100%' }}>
+    <Box sx={{ display: 'flex', height: '100vh', m: 0, p: 0 }}>
       {/* Sidebar */}
       <Box sx={{ width: 280, borderRight: 1, borderColor: 'divider', backgroundColor: 'background.paper' }}>
         <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
@@ -616,9 +616,9 @@ export default function ManageTab() {
       </Box>
 
       {/* Main Content */}
-      <Box sx={{ flex: 1, backgroundColor: 'background.default' }}>
+      <Box sx={{ flex: 1, backgroundColor: 'background.default', m: 0, p: 0 }}>
         {/* Header */}
-        <Box sx={{ p: 3, backgroundColor: 'background.paper', borderBottom: 1, borderColor: 'divider' }}>
+        <Box sx={{ p: 2, backgroundColor: 'background.paper', borderBottom: 1, borderColor: 'divider' }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <Typography variant="h5" sx={{ fontWeight: 600, textTransform: 'capitalize' }}>
               {currentSection?.label}
@@ -645,8 +645,8 @@ export default function ManageTab() {
         </Box>
 
         {/* Content */}
-        <Box sx={{ p: 3 }}>
-          <Paper elevation={1} sx={{ borderRadius: 2 }}>
+        <Box sx={{ p: 0 }}>
+          <Paper elevation={1} sx={{ borderRadius: 0, m: 0 }}>
             {renderTable()}
           </Paper>
         </Box>

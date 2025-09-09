@@ -203,6 +203,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
           minHeight: '100vh',
           width: `calc(100% - ${drawerWidth}px)`,
           ml: `${drawerWidth}px`,
+          p: 0,
         }}
       >
         {children}
