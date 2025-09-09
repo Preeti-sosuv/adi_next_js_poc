@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { storeAuthData, isAuthenticated, clearAuthData } from '../utils/auth'
+import { storeAuthData, isAuthenticated } from '../utils/auth'
 import {
   Box,
   Card,
@@ -415,19 +415,6 @@ export default function SignIn() {
                 )}
               </Button>
 
-              {/* Debug button to clear storage */}
-              <Button
-                onClick={() => {
-                  clearAuthData()
-                  console.log('🗑️ Cleared all auth data')
-                  window.location.reload()
-                }}
-                variant="outlined"
-                size="small"
-                sx={{ mt: 1 }}
-              >
-                Clear Storage & Reload
-              </Button>
 
             </Box>
           </CardContent>
