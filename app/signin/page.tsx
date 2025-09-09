@@ -55,9 +55,9 @@ export default function SignIn() {
     console.log('🔐 isAuthenticated() result:', authStatus)
     
     if (authStatus) {
-      console.log('⚠️ User already authenticated, redirecting to main form')
+      console.log('⚠️ User already authenticated, redirecting to ask-ai')
       console.log('⚠️ This might be preventing the sign-in API call!')
-      window.location.href = '/mainform'
+      window.location.href = '/ask-ai'
     }
   }, [])
 
@@ -220,8 +220,8 @@ export default function SignIn() {
           console.log('API Message:', responseData.result.message)
         }
         
-        // Redirect to MainForm page
-        window.location.href = '/mainform'
+        // Redirect to Ask AI page
+        window.location.href = '/ask-ai'
       } else {
         console.error('No token found in response:', responseData)
         

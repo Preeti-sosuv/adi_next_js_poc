@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useSearchParams } from 'next/navigation'
 import {
   Box,
   Card,
@@ -13,6 +12,7 @@ import {
   InputAdornment,
   Container,
   CircularProgress,
+  Alert,
 } from '@mui/material'
 import {
   Visibility,
@@ -20,7 +20,9 @@ import {
   AccountCircle,
 } from '@mui/icons-material'
 
-export default function ResetPassword() {
+export default function CreatePassword() {
+  const [firstName, setFirstName] = useState('')
+  const [lastName, setLastName] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -29,26 +31,39 @@ export default function ResetPassword() {
   const [errors, setErrors] = useState<{[key: string]: string}>({})
   const [linkKey, setLinkKey] = useState('')
   const [email, setEmail] = useState('')
+  const [error, setError] = useState('')
 
-  const searchParams = useSearchParams()
-
-  // Get link_key and email from URL parameters on component mount
+  // Get link_key and email from session storage on component mount
   useEffect(() => {
-    const urlLinkKey = searchParams.get('link_key')
-    const urlEmail = searchParams.get('email')
+    const storedLinkKey = sessionStorage.getItem('passwordResetLinkKey')
+    const storedEmail = sessionStorage.getItem('passwordResetEmail')
     
-    if (!urlLinkKey || !urlEmail) {
-      console.log('No link_key or email in URL, redirecting to signin')
-      window.location.href = '/signin'
+    console.log('🔑 Create password page loaded')
+    console.log('🔑 Stored link_key:', storedLinkKey)
+    console.log('🔑 Stored email:', storedEmail)
+    
+    if (!storedLinkKey || !storedEmail) {
+      console.log('❌ No password creation session found, redirecting to signin')
+      setError('Invalid access. Please sign in again.')
       return
     }
     
-    setLinkKey(urlLinkKey)
-    setEmail(urlEmail)
-  }, [searchParams])
+    setLinkKey(storedLinkKey)
+    setEmail(storedEmail)
+  }, [])
 
   const validateForm = () => {
     const newErrors: {[key: string]: string} = {}
+
+    // Validate first name
+    if (!firstName.trim()) {
+      newErrors.firstName = 'First name is required'
+    }
+
+    // Validate last name
+    if (!lastName.trim()) {
+      newErrors.lastName = 'Last name is required'
+    }
 
     // Validate password
     if (!newPassword) {
@@ -72,40 +87,48 @@ export default function ResetPassword() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    console.log('🚀 PASSWORD RESET FORM SUBMISSION STARTED')
-    console.log('Form data:', { email, newPassword: '***hidden***' })
-    console.log('Link key:', linkKey)
+    console.log('🔄 Create password form submitted')
     
     if (!validateForm()) {
       console.log('❌ Form validation failed')
       return
     }
 
-    console.log('✅ Form validation passed, proceeding with password reset...')
     setIsLoading(true)
+    setError('')
 
     try {
       const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL
+      console.log('🔄 Creating password for:', email)
+      console.log('🔄 Using link_key:', linkKey)
+      
       if (!baseUrl) {
         throw new Error('API base URL not configured')
       }
 
-      // Convert password to base64 before sending
+      // Convert password to base64 (matching login flow)
       const base64Password = btoa(newPassword)
-      console.log('🔐 Original password:', newPassword)
-      console.log('🔐 Base64 password:', base64Password)
-      
-      // API call to reset password using reset_password_v2 endpoint
-      const requestUrl = `${baseUrl}/reset_password_v2`
+      const base64ConfirmPassword = btoa(confirmPassword)
+      console.log('🔐 Password converted to base64')
+
+      const requestUrl = `${baseUrl}/create_password_v2`
       const requestBody = {
+        link_key: linkKey,
         email: email,
-        new_password: base64Password, // Convert password to base64
-        link_key: linkKey
+        first_name: firstName,
+        last_name: lastName,
+        new_password: base64Password,
+        confirm_password: base64ConfirmPassword
       }
-      
-      console.log('📡 Making password reset API call to:', requestUrl)
-      console.log('📡 Request body:', requestBody)
-      
+
+      console.log('🔄 Making create password API call to:', requestUrl)
+      console.log('🔄 Request body:', {
+        ...requestBody,
+        new_password: '[REDACTED]',
+        confirm_password: '[REDACTED]'
+      })
+
+      // API call to create password
       const response = await fetch(requestUrl, {
         method: 'POST',
         headers: {
@@ -114,28 +137,44 @@ export default function ResetPassword() {
         body: JSON.stringify(requestBody)
       })
 
+      console.log('🔄 Create password API response:', response)
+      console.log('🔄 Response status:', response.status)
+
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
+        const errorText = await response.text()
+        console.error('Create password error response:', errorText)
+        throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`)
       }
 
       const responseData = await response.json()
-      console.log('✅ Password reset response:', responseData)
-      console.log('✅ Response type:', typeof responseData)
-      console.log('✅ Response keys:', Object.keys(responseData || {}))
+      console.log('🔄 Create password API response data:', responseData)
 
       // Handle success response
-      if (responseData.result === "success") {
-        console.log('🎉 Password reset successful! Redirecting to sign-in page.')
-        alert('Password reset successful! You can now sign in with your new password.')
+      if (responseData.result === "success" || responseData.status === "success") {
+        console.log('✅ Password created successfully')
+        
+        // Clear session storage
+        sessionStorage.removeItem('passwordResetLinkKey')
+        sessionStorage.removeItem('passwordResetEmail')
+
+        // Show success message and redirect to signin
+        alert('Password created successfully! Please sign in with your new password.')
         window.location.href = '/signin'
       } else {
         console.log('❌ Unexpected response format:', responseData)
-        alert('Password reset failed. Please try again or contact support.')
+        setError('Password creation failed. Please try again.')
       }
 
     } catch (error) {
-      console.error('Password reset error:', error)
-      alert('Password reset failed: ' + (error instanceof Error ? error.message : 'Unknown error'))
+      console.error('❌ Password creation error:', error)
+      
+      // Check if it's a network error
+      if (error instanceof TypeError && error.message.includes('fetch')) {
+        console.error('Network error detected - possibly CORS or server not running')
+        setError('Network Error: Unable to connect to server. Please check if the API server is running.')
+      } else {
+        setError('Failed to create password: ' + (error instanceof Error ? error.message : 'Unknown error'))
+      }
     }
 
     setIsLoading(false)
@@ -147,6 +186,43 @@ export default function ResetPassword() {
 
   const handleClickShowConfirmPassword = () => {
     setShowConfirmPassword(!showConfirmPassword)
+  }
+
+  if (error && !linkKey) {
+    return (
+      <Box
+        sx={{
+          minHeight: '100vh',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: 'background.default',
+          py: 3,
+          px: 2,
+        }}
+      >
+        <Container maxWidth="sm">
+          <Card elevation={1} sx={{ borderRadius: 3 }}>
+            <CardContent sx={{ p: 4, textAlign: 'center' }}>
+              <AccountCircle sx={{ fontSize: 64, color: 'error.main', mb: 2 }} />
+              <Typography variant="h5" sx={{ fontWeight: 600, mb: 2 }}>
+                Access Denied
+              </Typography>
+              <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+                {error}
+              </Typography>
+              <Button
+                variant="contained"
+                onClick={() => window.location.href = '/signin'}
+                sx={{ borderRadius: 2, textTransform: 'none' }}
+              >
+                Back to Sign In
+              </Button>
+            </CardContent>
+          </Card>
+        </Container>
+      </Box>
+    )
   }
 
   return (
@@ -189,11 +265,11 @@ export default function ResetPassword() {
               </Box>
               
               <Typography variant="h4" component="h1" gutterBottom sx={{ fontWeight: 500 }}>
-                Reset Your Password
+                Create New Password
               </Typography>
               
               <Typography variant="body2" color="text.secondary">
-                Please enter your new password below
+                Welcome! Please set up your account by creating a new password
               </Typography>
               
               {email && (
@@ -203,7 +279,43 @@ export default function ResetPassword() {
               )}
             </Box>
 
+            {error && (
+              <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }}>
+                {error}
+              </Alert>
+            )}
+
             <Box component="form" onSubmit={handleSubmit} sx={{ width: '100%' }}>
+              {/* First Name */}
+              <TextField
+                fullWidth
+                label="First Name"
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+                required
+                error={!!errors.firstName}
+                helperText={errors.firstName}
+                sx={{ mb: 3 }}
+                InputProps={{
+                  sx: { borderRadius: 2 }
+                }}
+              />
+
+              {/* Last Name */}
+              <TextField
+                fullWidth
+                label="Last Name"
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+                required
+                error={!!errors.lastName}
+                helperText={errors.lastName}
+                sx={{ mb: 3 }}
+                InputProps={{
+                  sx: { borderRadius: 2 }
+                }}
+              />
+
               {/* New Password */}
               <TextField
                 fullWidth
@@ -263,24 +375,35 @@ export default function ResetPassword() {
                 fullWidth
                 variant="contained"
                 size="large"
-                disabled={isLoading}
+                disabled={isLoading || !linkKey}
                 sx={{
                   py: 1.5,
                   borderRadius: 2,
                   textTransform: 'none',
                   fontSize: '1rem',
                   fontWeight: 500,
+                  mb: 2,
                 }}
               >
                 {isLoading ? (
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <CircularProgress size={20} color="inherit" />
-                    Resetting Password...
+                    Creating Password...
                   </Box>
                 ) : (
-                  'Reset Password'
+                  'Create Password'
                 )}
               </Button>
+
+              <Box sx={{ textAlign: 'center' }}>
+                <Button
+                  variant="text"
+                  onClick={() => window.location.href = '/signin'}
+                  sx={{ textTransform: 'none', color: 'text.secondary' }}
+                >
+                  Back to Sign In
+                </Button>
+              </Box>
             </Box>
           </CardContent>
         </Card>

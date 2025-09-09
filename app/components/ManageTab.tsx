@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { getAuthData } from '../utils/auth'
 import {
   Box,
   Paper,
@@ -23,6 +24,8 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  CircularProgress,
+  Alert,
 } from '@mui/material'
 import {
   Add,
@@ -37,11 +40,13 @@ import {
 
 interface Organization {
   id: number
-  parentId: string
-  orgId: number
-  name: string
-  type: 'root' | 'client'
-  status: 'Active' | 'Inactive'
+  org_owner?: string
+  org_id: number
+  parent_id?: number
+  org_type: string
+  org_name: string
+  default_dept_id?: number
+  status: string
 }
 
 interface User {
@@ -55,10 +60,11 @@ interface User {
 
 interface Department {
   id: number
+  org_id: number
+  dept_id: number
+  dept_type: string
   name: string
-  organization: string
-  employees: number
-  status: 'Active' | 'Inactive'
+  status: string
 }
 
 interface Role {
@@ -69,32 +75,6 @@ interface Role {
   status: 'Active' | 'Inactive'
 }
 
-const organizationsData: Organization[] = [
-  {
-    id: 1,
-    parentId: 'AUTOMATED-DATA.IO',
-    orgId: 1,
-    name: 'AUTOMATED-DATA.IO',
-    type: 'root',
-    status: 'Active',
-  },
-  {
-    id: 2,
-    parentId: 'AUTOMATED-DATA.IO',
-    orgId: 2,
-    name: 'TEST_ORG1',
-    type: 'client',
-    status: 'Active',
-  },
-  {
-    id: 3,
-    parentId: 'AUTOMATED-DATA.IO',
-    orgId: 4,
-    name: 'TEST_ORG2',
-    type: 'client',
-    status: 'Active',
-  },
-]
 
 const usersData: User[] = [
   {
@@ -115,22 +95,6 @@ const usersData: User[] = [
   },
 ]
 
-const departmentsData: Department[] = [
-  {
-    id: 1,
-    name: 'Engineering',
-    organization: 'AUTOMATED-DATA.IO',
-    employees: 25,
-    status: 'Active',
-  },
-  {
-    id: 2,
-    name: 'Marketing',
-    organization: 'TEST_ORG1',
-    employees: 10,
-    status: 'Active',
-  },
-]
 
 const rolesData: Role[] = [
   {
@@ -159,10 +123,155 @@ export default function ManageTab() {
   const [newUserEmail, setNewUserEmail] = useState('')
   const [newRoleName, setNewRoleName] = useState('')
   const [newRoleDescription, setNewRoleDescription] = useState('')
+  
+  // API data states
+  const [organizations, setOrganizations] = useState<Organization[]>([])
+  const [departments, setDepartments] = useState<Department[]>([])
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  // Fetch organizations from API
+  const fetchOrganizations = async () => {
+    console.log('🏢 Fetching organizations...')
+    setIsLoading(true)
+    setError('')
+    
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL
+      if (!baseUrl) {
+        throw new Error('API base URL not configured')
+      }
+
+      // Get token from auth data
+      const authData = getAuthData()
+      const token = authData?.token
+      
+      if (!token) {
+        throw new Error('No authentication token found')
+      }
+
+      const requestUrl = `${baseUrl}/get_orgs`
+      const requestBody = {
+        token: token
+      }
+
+      console.log('🏢 Making get organizations API call to:', requestUrl)
+      console.log('🏢 Request body:', { token: token.substring(0, 8) + '...' })
+
+      const response = await fetch(requestUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody)
+      })
+
+      console.log('🏢 Organizations API response status:', response.status)
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('Organizations API error response:', errorText)
+        throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`)
+      }
+
+      const responseData = await response.json()
+      console.log('🏢 Organizations API response data:', responseData)
+
+      // Handle API response format: { "result": [true, [...organizations]] }
+      if (responseData.result && Array.isArray(responseData.result) && responseData.result[0] === true) {
+        const orgsData = responseData.result[1] || []
+        console.log('✅ Successfully fetched', orgsData.length, 'organizations')
+        setOrganizations(orgsData)
+      } else {
+        console.log('❌ Unexpected response format or error:', responseData)
+        throw new Error('Invalid response format from organizations API')
+      }
+
+    } catch (error) {
+      console.error('❌ Error fetching organizations:', error)
+      setError('Failed to load organizations: ' + (error instanceof Error ? error.message : 'Unknown error'))
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // Fetch departments from API
+  const fetchDepartments = async () => {
+    console.log('🏬 Fetching departments...')
+    setIsLoading(true)
+    setError('')
+    
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL
+      if (!baseUrl) {
+        throw new Error('API base URL not configured')
+      }
+
+      // Get token from auth data
+      const authData = getAuthData()
+      const token = authData?.token
+      
+      if (!token) {
+        throw new Error('No authentication token found')
+      }
+
+      const requestUrl = `${baseUrl}/get_depts`
+      const requestBody = {
+        token: token
+      }
+
+      console.log('🏬 Making get departments API call to:', requestUrl)
+      console.log('🏬 Request body:', { token: token.substring(0, 8) + '...' })
+
+      const response = await fetch(requestUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody)
+      })
+
+      console.log('🏬 Departments API response status:', response.status)
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('Departments API error response:', errorText)
+        throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`)
+      }
+
+      const responseData = await response.json()
+      console.log('🏬 Departments API response data:', responseData)
+
+      // Handle API response format: { "result": [true, [...departments]] }
+      if (responseData.result && Array.isArray(responseData.result) && responseData.result[0] === true) {
+        const departmentsList = responseData.result[1] || []
+        console.log('🏬 Setting departments data:', departmentsList)
+        setDepartments(departmentsList)
+      } else {
+        console.log('❌ Unexpected departments response format:', responseData)
+        setError('Unexpected response format from departments API')
+      }
+
+    } catch (error) {
+      console.error('❌ Error fetching departments:', error)
+      setError('Failed to load departments: ' + (error instanceof Error ? error.message : 'Unknown error'))
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // Load data when component mounts or when section is selected
+  useEffect(() => {
+    if (selectedSection === 'organizations') {
+      fetchOrganizations()
+    } else if (selectedSection === 'departments') {
+      fetchDepartments()
+    }
+  }, [selectedSection])
 
   const sections = [
-    { id: 'organizations', label: 'Organizations', icon: <Business />, data: organizationsData },
-    { id: 'departments', label: 'Departments', icon: <Apartment />, data: departmentsData },
+    { id: 'organizations', label: 'Organizations', icon: <Business />, data: organizations },
+    { id: 'departments', label: 'Departments', icon: <Apartment />, data: departments },
     { id: 'users', label: 'Users', icon: <People />, data: usersData },
     { id: 'roles', label: 'Roles', icon: <AdminPanelSettings />, data: rolesData },
   ]
@@ -227,46 +336,78 @@ export default function ManageTab() {
 
   const handleRefresh = () => {
     console.log(`Refresh ${selectedSection}`)
+    if (selectedSection === 'organizations') {
+      fetchOrganizations()
+    } else if (selectedSection === 'departments') {
+      fetchDepartments()
+    }
+    // Add other refresh handlers for users, roles as needed
   }
 
   const renderTable = () => {
     switch (selectedSection) {
       case 'organizations':
         return (
-          <TableContainer>
-            <Table>
-              <TableHead>
-                <TableRow sx={{ backgroundColor: 'grey.100' }}>
-                  <TableCell sx={{ fontWeight: 600 }}>Parent #ID</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>Org #ID</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>Name</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>Type</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>Status</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }} align="right">Action</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {(currentData as Organization[]).map((org) => (
-                  <TableRow key={org.id} hover>
-                    <TableCell>{org.parentId}</TableCell>
-                    <TableCell>{org.orgId}</TableCell>
-                    <TableCell sx={{ fontWeight: 500 }}>{org.name}</TableCell>
-                    <TableCell>
-                      <Chip label={org.type} color={getTypeColor(org.type) as any} size="small" />
-                    </TableCell>
-                    <TableCell>
-                      <Chip label={org.status} color={getStatusColor(org.status) as any} size="small" />
-                    </TableCell>
-                    <TableCell align="right">
-                      <IconButton size="small" onClick={() => handleDelete(org.id)}>
-                        <Delete fontSize="small" />
-                      </IconButton>
-                    </TableCell>
+          <>
+            {error && (
+              <Alert severity="error" sx={{ mb: 2 }}>
+                {error}
+              </Alert>
+            )}
+            <TableContainer>
+              <Table>
+                <TableHead>
+                  <TableRow sx={{ backgroundColor: 'grey.100' }}>
+                    <TableCell sx={{ fontWeight: 600 }}>Parent #ID</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>Org #ID</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>Name</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>Type</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>Status</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }} align="right">Action</TableCell>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
+                </TableHead>
+                <TableBody>
+                  {isLoading ? (
+                    <TableRow>
+                      <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
+                        <CircularProgress size={24} />
+                        <Typography variant="body2" sx={{ mt: 1 }}>
+                          Loading organizations...
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  ) : organizations.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
+                        <Typography variant="body2" color="text.secondary">
+                          No organizations found
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    organizations.map((org) => (
+                      <TableRow key={org.org_id} hover>
+                        <TableCell>{org.parent_id || '-'}</TableCell>
+                        <TableCell>{org.org_id}</TableCell>
+                        <TableCell sx={{ fontWeight: 500 }}>{org.org_name}</TableCell>
+                        <TableCell>
+                          <Chip label={org.org_type} color={getTypeColor(org.org_type) as any} size="small" />
+                        </TableCell>
+                        <TableCell>
+                          <Chip label={org.status} color={getStatusColor(org.status) as any} size="small" />
+                        </TableCell>
+                        <TableCell align="right">
+                          <IconButton size="small" onClick={() => handleDelete(org.org_id)}>
+                            <Delete fontSize="small" />
+                          </IconButton>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </>
         )
 
       case 'users':
@@ -312,39 +453,69 @@ export default function ManageTab() {
 
       case 'departments':
         return (
-          <TableContainer>
-            <Table>
-              <TableHead>
-                <TableRow sx={{ backgroundColor: 'grey.100' }}>
-                  <TableCell sx={{ fontWeight: 600 }}>Name</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>Organization</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>Employees</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>Status</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }} align="right">Actions</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {(currentData as Department[]).map((dept) => (
-                  <TableRow key={dept.id} hover>
-                    <TableCell sx={{ fontWeight: 500 }}>{dept.name}</TableCell>
-                    <TableCell>{dept.organization}</TableCell>
-                    <TableCell>{dept.employees}</TableCell>
-                    <TableCell>
-                      <Chip label={dept.status} color={getStatusColor(dept.status) as any} size="small" />
-                    </TableCell>
-                    <TableCell align="right">
-                      <IconButton size="small" onClick={() => handleEdit(dept.id)}>
-                        <Edit fontSize="small" />
-                      </IconButton>
-                      <IconButton size="small" onClick={() => handleDelete(dept.id)}>
-                        <Delete fontSize="small" />
-                      </IconButton>
-                    </TableCell>
+          <>
+            {error && (
+              <Alert severity="error" sx={{ mb: 2 }}>
+                {error}
+              </Alert>
+            )}
+            <TableContainer>
+              <Table>
+                <TableHead>
+                  <TableRow sx={{ backgroundColor: 'grey.100' }}>
+                    <TableCell sx={{ fontWeight: 600 }}>Dept #ID</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>Name</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>Org #ID</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>Type</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>Status</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }} align="right">Actions</TableCell>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
+                </TableHead>
+                <TableBody>
+                  {isLoading ? (
+                    <TableRow>
+                      <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
+                        <CircularProgress size={24} />
+                        <Typography variant="body2" sx={{ mt: 1 }}>
+                          Loading departments...
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  ) : departments.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
+                        <Typography variant="body2" color="text.secondary">
+                          No departments found
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    departments.map((dept) => (
+                      <TableRow key={dept.dept_id} hover>
+                        <TableCell>{dept.dept_id}</TableCell>
+                        <TableCell sx={{ fontWeight: 500 }}>{dept.name}</TableCell>
+                        <TableCell>{dept.org_id}</TableCell>
+                        <TableCell>
+                          <Chip label={dept.dept_type} color={getTypeColor(dept.dept_type) as any} size="small" />
+                        </TableCell>
+                        <TableCell>
+                          <Chip label={dept.status} color={getStatusColor(dept.status) as any} size="small" />
+                        </TableCell>
+                        <TableCell align="right">
+                          <IconButton size="small" onClick={() => handleEdit(dept.id)}>
+                            <Edit fontSize="small" />
+                          </IconButton>
+                          <IconButton size="small" onClick={() => handleDelete(dept.id)}>
+                            <Delete fontSize="small" />
+                          </IconButton>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </>
         )
 
       case 'roles':
