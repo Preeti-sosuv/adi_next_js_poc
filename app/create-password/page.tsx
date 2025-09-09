@@ -111,7 +111,7 @@ export default function CreatePassword() {
       const base64ConfirmPassword = btoa(confirmPassword)
       console.log('🔐 Password converted to base64')
 
-      const requestUrl = `${baseUrl}/create_password_v2`
+      const requestUrl = `${baseUrl}/reset_password_v2`
       const requestBody = {
         link_key: linkKey,
         email: email,
@@ -121,7 +121,7 @@ export default function CreatePassword() {
         confirm_password: base64ConfirmPassword
       }
 
-      console.log('🔄 Making create password API call to:', requestUrl)
+      console.log('🔄 Making reset password API call to:', requestUrl)
       console.log('🔄 Request body:', {
         ...requestBody,
         new_password: '[REDACTED]',
@@ -137,43 +137,43 @@ export default function CreatePassword() {
         body: JSON.stringify(requestBody)
       })
 
-      console.log('🔄 Create password API response:', response)
+      console.log('🔄 Reset password API response:', response)
       console.log('🔄 Response status:', response.status)
 
       if (!response.ok) {
         const errorText = await response.text()
-        console.error('Create password error response:', errorText)
+        console.error('Reset password error response:', errorText)
         throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`)
       }
 
       const responseData = await response.json()
-      console.log('🔄 Create password API response data:', responseData)
+      console.log('🔄 Reset password API response data:', responseData)
 
       // Handle success response
       if (responseData.result === "success" || responseData.status === "success") {
-        console.log('✅ Password created successfully')
+        console.log('✅ Password reset successfully')
         
         // Clear session storage
         sessionStorage.removeItem('passwordResetLinkKey')
         sessionStorage.removeItem('passwordResetEmail')
 
         // Show success message and redirect to signin
-        alert('Password created successfully! Please sign in with your new password.')
+        alert('Password reset successfully! Please sign in with your new password.')
         window.location.href = '/signin'
       } else {
         console.log('❌ Unexpected response format:', responseData)
-        setError('Password creation failed. Please try again.')
+        setError('Password reset failed. Please try again.')
       }
 
     } catch (error) {
-      console.error('❌ Password creation error:', error)
+      console.error('❌ Password reset error:', error)
       
       // Check if it's a network error
       if (error instanceof TypeError && error.message.includes('fetch')) {
         console.error('Network error detected - possibly CORS or server not running')
         setError('Network Error: Unable to connect to server. Please check if the API server is running.')
       } else {
-        setError('Failed to create password: ' + (error instanceof Error ? error.message : 'Unknown error'))
+        setError('Failed to reset password: ' + (error instanceof Error ? error.message : 'Unknown error'))
       }
     }
 
