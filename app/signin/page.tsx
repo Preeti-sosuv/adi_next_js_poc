@@ -185,7 +185,7 @@ export default function SignIn() {
         console.log('✅ API validation successful, received link_key:', responseData.result.link_key)
         
         // Check if this is a first-time login requiring password creation
-        if (responseData.result?.message === "Create new password!" && responseData.result?.password_reset === true) {
+        if (responseData.result?.message === "Create new password!") {
           console.log('🔑 First-time login detected, redirecting to create password')
           
           // Store link_key temporarily for password creation process
