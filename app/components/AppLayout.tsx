@@ -37,10 +37,13 @@ interface AppLayoutProps {
 
 export default function AppLayout({ children }: AppLayoutProps) {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
+  const [orgAnchorEl, setOrgAnchorEl] = useState<null | HTMLElement>(null)
   const [userEmail, setUserEmail] = useState<string>('')
+  const [organizations, setOrganizations] = useState<any[]>([])
+  const [selectedOrg, setSelectedOrg] = useState<string>('AUTOMATED DATA')
   const pathname = usePathname()
 
-  // Get user email from auth data
+  // Get user email and fetch organizations
   useEffect(() => {
     const authData = getAuthData()
     if (authData?.userDetails?.email) {
@@ -59,7 +62,45 @@ export default function AppLayout({ children }: AppLayoutProps) {
         }
       }
     }
+
+    // Fetch organizations
+    fetchOrganizations()
   }, [])
+
+  const fetchOrganizations = async () => {
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL
+      const authData = getAuthData()
+      const token = authData?.token
+      
+      if (!baseUrl || !token) return
+
+      const response = await fetch(`${baseUrl}/get_orgs`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          org: "",
+          token: token
+        })
+      })
+
+      if (response.ok) {
+        const responseData = await response.json()
+        if (responseData.result && Array.isArray(responseData.result) && responseData.result[0] === true) {
+          const orgsList = responseData.result[1] || []
+          setOrganizations(orgsList)
+          // Set the first organization as selected if available
+          if (orgsList.length > 0) {
+            setSelectedOrg(orgsList[0].name)
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching organizations:', error)
+    }
+  }
 
   const handleProfileMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget)
@@ -67,6 +108,14 @@ export default function AppLayout({ children }: AppLayoutProps) {
 
   const handleProfileMenuClose = () => {
     setAnchorEl(null)
+  }
+
+  const handleOrgMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
+    setOrgAnchorEl(event.currentTarget)
+  }
+
+  const handleOrgMenuClose = () => {
+    setOrgAnchorEl(null)
   }
 
   const handleLogout = () => {
@@ -160,7 +209,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
         <ListItemButton
           onClick={handleProfileMenuOpen}
           sx={{
-            borderRadius: 2,
+            borderRadius: 1,
             minHeight: 48,
             justifyContent: 'center',
             px: 1,
@@ -191,7 +240,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
         }}
         PaperProps={{
           sx: {
-            borderRadius: 3,
+            borderRadius: 1,
             minWidth: 280,
             boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
             border: '1px solid',
@@ -214,6 +263,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
 
         {/* Menu Items */}
         <MenuItem 
+          onClick={handleOrgMenuOpen}
           sx={{ 
             py: 1.5, 
             px: 2,
@@ -303,6 +353,76 @@ export default function AppLayout({ children }: AppLayoutProps) {
             Logout
           </Typography>
         </MenuItem>
+      </Menu>
+
+      {/* Organization Menu */}
+      <Menu
+        anchorEl={orgAnchorEl}
+        open={Boolean(orgAnchorEl)}
+        onClose={handleOrgMenuClose}
+        anchorOrigin={{
+          vertical: 'top',
+          horizontal: 'right',
+        }}
+        transformOrigin={{
+          vertical: 'top',
+          horizontal: 'left',
+        }}
+        PaperProps={{
+          sx: {
+            borderRadius: 1,
+            minWidth: 250,
+            boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
+            border: '1px solid',
+            borderColor: 'divider',
+            ml: 0,
+          }
+        }}
+      >
+        <Box sx={{ p: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'text.primary' }}>
+            Select Organization
+          </Typography>
+        </Box>
+
+        {organizations.length > 0 ? (
+          organizations.map((org) => (
+            <MenuItem 
+              key={org.id}
+              onClick={() => {
+                setSelectedOrg(org.name)
+                handleOrgMenuClose()
+              }}
+              sx={{ 
+                py: 1.5, 
+                px: 2,
+                '&:hover': {
+                  backgroundColor: 'action.hover',
+                }
+              }}
+            >
+              <Typography 
+                variant="body2" 
+                sx={{ 
+                  flex: 1,
+                  color: selectedOrg === org.name ? 'primary.main' : 'text.primary',
+                  fontWeight: selectedOrg === org.name ? 500 : 400
+                }}
+              >
+                {org.name}
+              </Typography>
+              {selectedOrg === org.name && (
+                <Box sx={{ ml: 1, color: 'primary.main' }}>✓</Box>
+              )}
+            </MenuItem>
+          ))
+        ) : (
+          <MenuItem sx={{ py: 1.5, px: 2 }}>
+            <Typography variant="body2" color="text.secondary">
+              No organizations available
+            </Typography>
+          </MenuItem>
+        )}
       </Menu>
 
       {/* Sidebar */}

@@ -76,25 +76,6 @@ interface Role {
 }
 
 
-const usersData: User[] = [
-  {
-    id: 1,
-    name: 'John Doe',
-    email: 'john.doe@example.com',
-    role: 'Admin',
-    status: 'Active',
-    lastLogin: '2024-01-15',
-  },
-  {
-    id: 2,
-    name: 'Jane Smith',
-    email: 'jane.smith@example.com',
-    role: 'User',
-    status: 'Active',
-    lastLogin: '2024-01-14',
-  },
-]
-
 
 const rolesData: Role[] = [
   {
@@ -127,6 +108,7 @@ export default function ManageTab() {
   // API data states
   const [organizations, setOrganizations] = useState<Organization[]>([])
   const [departments, setDepartments] = useState<Department[]>([])
+  const [users, setUsers] = useState<User[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -260,19 +242,87 @@ export default function ManageTab() {
     }
   }
 
+  // Fetch users from API
+  const fetchUsers = async () => {
+    console.log('👥 Fetching users...')
+    setIsLoading(true)
+    setError('')
+
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL
+      if (!baseUrl) {
+        throw new Error('API base URL not configured')
+      }
+
+      // Get current user's token from auth data
+      const authData = getAuthData()
+      const token = authData?.token
+      
+      if (!token) {
+        throw new Error('No authentication token found. Please sign in again.')
+      }
+
+      const requestUrl = `${baseUrl}/get_users`
+      const requestBody = {
+        user: "",
+        token: token
+      }
+
+      console.log('👥 Making get users API call to:', requestUrl)
+      console.log('👥 Request body:', { user: "", token: token.substring(0, 8) + '...' })
+
+      const response = await fetch(requestUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody)
+      })
+
+      console.log('👥 Users API response status:', response.status)
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('Users API error response:', errorText)
+        throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`)
+      }
+
+      const responseData = await response.json()
+      console.log('👥 Users API response data:', responseData)
+
+      // Handle API response format: { "result": [true, [...users]] }
+      if (responseData.result && Array.isArray(responseData.result) && responseData.result[0] === true) {
+        const usersList = responseData.result[1] || []
+        console.log('👥 Setting users data:', usersList)
+        setUsers(usersList)
+      } else {
+        console.log('👥 Unexpected users response format:', responseData)
+        setError('Unexpected response format from users API')
+      }
+
+    } catch (error) {
+      console.error('❌ Error fetching users:', error)
+      setError('Failed to load users: ' + (error instanceof Error ? error.message : 'Unknown error'))
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   // Load data when component mounts or when section is selected
   useEffect(() => {
     if (selectedSection === 'organizations') {
       fetchOrganizations()
     } else if (selectedSection === 'departments') {
       fetchDepartments()
+    } else if (selectedSection === 'users') {
+      fetchUsers()
     }
   }, [selectedSection])
 
   const sections = [
     { id: 'organizations', label: 'Organizations', icon: <Business />, data: organizations },
     { id: 'departments', label: 'Departments', icon: <Apartment />, data: departments },
-    { id: 'users', label: 'Users', icon: <People />, data: usersData },
+    { id: 'users', label: 'Users', icon: <People />, data: users },
     { id: 'roles', label: 'Roles', icon: <AdminPanelSettings />, data: rolesData },
   ]
 
@@ -427,8 +477,10 @@ export default function ManageTab() {
       fetchOrganizations()
     } else if (selectedSection === 'departments') {
       fetchDepartments()
+    } else if (selectedSection === 'users') {
+      fetchUsers()
     }
-    // Add other refresh handlers for users, roles as needed
+    // Add other refresh handlers for roles as needed
   }
 
   const renderTable = () => {
@@ -503,36 +555,55 @@ export default function ManageTab() {
             <Table>
               <TableHead>
                 <TableRow sx={{ backgroundColor: 'grey.100' }}>
+                  <TableCell sx={{ fontWeight: 600 }}>Org ID</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>Dept ID</TableCell>
                   <TableCell sx={{ fontWeight: 600 }}>Name</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>Email</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>Role</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>Status</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>Last Login</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }} align="right">Actions</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }}>Invite Status</TableCell>
+                  <TableCell sx={{ fontWeight: 600 }} align="right">Action</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {(currentData as User[]).map((user) => (
-                  <TableRow key={user.id} hover>
-                    <TableCell sx={{ fontWeight: 500 }}>{user.name}</TableCell>
-                    <TableCell>{user.email}</TableCell>
-                    <TableCell>
-                      <Chip label={user.role} color="info" size="small" variant="outlined" />
-                    </TableCell>
-                    <TableCell>
-                      <Chip label={user.status} color={getStatusColor(user.status) as any} size="small" />
-                    </TableCell>
-                    <TableCell>{user.lastLogin}</TableCell>
-                    <TableCell align="right">
-                      <IconButton size="small" onClick={() => handleEdit(user.id)}>
-                        <Edit fontSize="small" />
-                      </IconButton>
-                      <IconButton size="small" onClick={() => handleDelete(user.id)}>
-                        <Delete fontSize="small" />
-                      </IconButton>
+                {isLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={5} align="center" sx={{ py: 4 }}>
+                      <CircularProgress size={24} />
+                      <Typography variant="body2" sx={{ mt: 1 }}>
+                        Loading users...
+                      </Typography>
                     </TableCell>
                   </TableRow>
-                ))}
+                ) : (currentData as any[]).length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} align="center" sx={{ py: 4 }}>
+                      <Typography variant="body2" color="text.secondary">
+                        No users found
+                      </Typography>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  (currentData as any[]).map((user) => (
+                    <TableRow key={user.id} hover>
+                      <TableCell sx={{ fontWeight: 500 }}>{user.org_id}</TableCell>
+                      <TableCell>{user.dept_id}</TableCell>
+                      <TableCell>{user.name}</TableCell>
+                      <TableCell>
+                        <Chip 
+                          label={user.status} 
+                          color={user.status === 'Active' ? 'success' : 'warning'} 
+                          size="small" 
+                        />
+                      </TableCell>
+                      <TableCell align="right">
+                        <IconButton size="small" onClick={() => handleEdit(user.id)}>
+                          <Edit fontSize="small" />
+                        </IconButton>
+                        <IconButton size="small" onClick={() => handleDelete(user.id)}>
+                          <Delete fontSize="small" />
+                        </IconButton>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
           </TableContainer>
