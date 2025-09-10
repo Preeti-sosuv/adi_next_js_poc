@@ -77,6 +77,26 @@ export default function ResetPassword() {
       console.log('✅ Found query parameters for password reset')
       setLinkKey(urlLinkKey)
       setEmail(urlEmail)
+      
+      // Note: For admin, first_name and last_name will be hardcoded in API call
+      
+      return
+    }
+    
+    // Check sessionStorage (for first-time login from signin page)
+    const storedLinkKey = sessionStorage.getItem('passwordResetLinkKey')
+    const storedEmail = sessionStorage.getItem('passwordResetEmail')
+    
+    console.log('🔑 Checking sessionStorage - link_key:', storedLinkKey)
+    console.log('🔑 Checking sessionStorage - email:', storedEmail)
+    
+    if (storedLinkKey && storedEmail) {
+      console.log('✅ Found session storage parameters for first-time login')
+      setLinkKey(storedLinkKey)
+      setEmail(storedEmail)
+      
+      // Note: For admin, first_name and last_name will be hardcoded in API call
+      
       return
     }
     
@@ -134,10 +154,14 @@ export default function ResetPassword() {
       
       // API call to reset password using reset_password_v2 endpoint
       const requestUrl = `${baseUrl}/reset_password_v2`
+      
+      // Hardcode admin names for first-time login
       const requestBody = {
         email: email,
-        new_password: base64Password, // Convert password to base64
-        link_key: linkKey
+        new_password: base64Password,
+        link_key: linkKey,
+        first_name: 'adi',
+        last_name: 'admin'
       }
       
       console.log('📡 Making password reset API call to:', requestUrl)

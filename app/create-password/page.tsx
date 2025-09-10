@@ -81,6 +81,14 @@ export default function CreatePassword() {
       console.log('✅ Found session storage parameters')
       setLinkKey(storedLinkKey)
       setEmail(storedEmail)
+      
+      // Set default names for admin first-time login
+      if (storedEmail === 'adi-admin@automated-data.io') {
+        console.log('🔑 Setting default admin names: first_name=adi, last_name=admin')
+        setFirstName('adi')
+        setLastName('admin')
+      }
+      
       return
     }
     
