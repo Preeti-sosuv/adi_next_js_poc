@@ -1,8 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { getAuthData } from '../utils/auth'
 import {
   Box,
   Drawer,
@@ -21,6 +22,11 @@ import {
   ManageAccounts,
   Logout,
   AccountCircle,
+  Business,
+  Apartment,
+  HealthAndSafety,
+  Help,
+  ChevronRight,
 } from '@mui/icons-material'
 
 const drawerWidth = 72
@@ -31,7 +37,29 @@ interface AppLayoutProps {
 
 export default function AppLayout({ children }: AppLayoutProps) {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
+  const [userEmail, setUserEmail] = useState<string>('')
   const pathname = usePathname()
+
+  // Get user email from auth data
+  useEffect(() => {
+    const authData = getAuthData()
+    if (authData?.userDetails?.email) {
+      setUserEmail(authData.userDetails.email)
+    } else {
+      // Fallback: try to get email from stored auth data
+      const storedAuthData = localStorage.getItem('authData')
+      if (storedAuthData) {
+        try {
+          const parsedData = JSON.parse(storedAuthData)
+          if (parsedData.userDetails?.email) {
+            setUserEmail(parsedData.userDetails.email)
+          }
+        } catch (error) {
+          console.error('Error parsing stored auth data:', error)
+        }
+      }
+    }
+  }, [])
 
   const handleProfileMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget)
@@ -154,19 +182,126 @@ export default function AppLayout({ children }: AppLayoutProps) {
         open={Boolean(anchorEl)}
         onClose={handleProfileMenuClose}
         anchorOrigin={{
-          vertical: 'bottom',
-          horizontal: 'right',
-        }}
-        transformOrigin={{
           vertical: 'top',
           horizontal: 'right',
         }}
+        transformOrigin={{
+          vertical: 'bottom',
+          horizontal: 'right',
+        }}
+        PaperProps={{
+          sx: {
+            borderRadius: 3,
+            minWidth: 280,
+            boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
+            border: '1px solid',
+            borderColor: 'divider',
+            mb: 1,
+          }
+        }}
       >
-        <MenuItem onClick={handleLogout}>
-          <ListItemIcon>
+        {/* User Email Header */}
+        <Box sx={{ p: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <Avatar sx={{ width: 32, height: 32, backgroundColor: 'primary.main' }}>
+              <AccountCircle />
+            </Avatar>
+            <Typography variant="body2" color="text.primary" sx={{ fontWeight: 500 }}>
+              {userEmail || 'user@example.com'}
+            </Typography>
+          </Box>
+        </Box>
+
+        {/* Menu Items */}
+        <MenuItem 
+          sx={{ 
+            py: 1.5, 
+            px: 2,
+            '&:hover': {
+              backgroundColor: 'action.hover',
+            }
+          }}
+        >
+          <ListItemIcon sx={{ minWidth: 40 }}>
+            <Business fontSize="small" />
+          </ListItemIcon>
+          <Typography variant="body2" sx={{ flex: 1 }}>
+            Organization
+          </Typography>
+          <ChevronRight fontSize="small" color="action" />
+        </MenuItem>
+
+        <MenuItem 
+          sx={{ 
+            py: 1.5, 
+            px: 2,
+            '&:hover': {
+              backgroundColor: 'action.hover',
+            }
+          }}
+        >
+          <ListItemIcon sx={{ minWidth: 40 }}>
+            <Apartment fontSize="small" />
+          </ListItemIcon>
+          <Typography variant="body2" sx={{ flex: 1 }}>
+            Department
+          </Typography>
+          <ChevronRight fontSize="small" color="action" />
+        </MenuItem>
+
+        <MenuItem 
+          sx={{ 
+            py: 1.5, 
+            px: 2,
+            '&:hover': {
+              backgroundColor: 'action.hover',
+            }
+          }}
+        >
+          <ListItemIcon sx={{ minWidth: 40 }}>
+            <HealthAndSafety fontSize="small" />
+          </ListItemIcon>
+          <Typography variant="body2" sx={{ flex: 1 }}>
+            Service Status
+          </Typography>
+        </MenuItem>
+
+        <MenuItem 
+          sx={{ 
+            py: 1.5, 
+            px: 2,
+            '&:hover': {
+              backgroundColor: 'action.hover',
+            }
+          }}
+        >
+          <ListItemIcon sx={{ minWidth: 40 }}>
+            <Help fontSize="small" />
+          </ListItemIcon>
+          <Typography variant="body2" sx={{ flex: 1 }}>
+            Help
+          </Typography>
+        </MenuItem>
+
+        {/* Divider before logout */}
+        <Box sx={{ borderTop: '1px solid', borderColor: 'divider', mt: 1 }} />
+
+        <MenuItem 
+          onClick={handleLogout}
+          sx={{ 
+            py: 1.5, 
+            px: 2,
+            '&:hover': {
+              backgroundColor: 'error.light',
+            }
+          }}
+        >
+          <ListItemIcon sx={{ minWidth: 40 }}>
             <Logout fontSize="small" />
           </ListItemIcon>
-          Logout
+          <Typography variant="body2" sx={{ flex: 1 }}>
+            Logout
+          </Typography>
         </MenuItem>
       </Menu>
 
@@ -204,6 +339,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
           width: `calc(100% - ${drawerWidth}px)`,
           ml: `${drawerWidth}px`,
           p: 0,
+          m: 0,
         }}
       >
         {children}

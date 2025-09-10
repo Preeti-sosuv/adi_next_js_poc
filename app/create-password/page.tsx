@@ -33,23 +33,60 @@ export default function CreatePassword() {
   const [email, setEmail] = useState('')
   const [error, setError] = useState('')
 
-  // Get link_key and email from session storage on component mount
+  // Get link_key and email from URL parameters or session storage
   useEffect(() => {
-    const storedLinkKey = sessionStorage.getItem('passwordResetLinkKey')
-    const storedEmail = sessionStorage.getItem('passwordResetEmail')
-    
     console.log('🔑 Create password page loaded')
-    console.log('🔑 Stored link_key:', storedLinkKey)
-    console.log('🔑 Stored email:', storedEmail)
     
-    if (!storedLinkKey || !storedEmail) {
-      console.log('❌ No password creation session found, redirecting to signin')
-      setError('Invalid access. Please sign in again.')
+    // First try to get parameters from URL hash (for invited users)
+    const getUrlParams = () => {
+      const hash = window.location.hash
+      console.log('🔑 URL hash:', hash)
+      
+      if (hash.includes('?')) {
+        const queryString = hash.split('?')[1]
+        const urlParams = new URLSearchParams(queryString)
+        const urlEmail = urlParams.get('email')
+        const urlLinkKey = urlParams.get('link_key')
+        
+        console.log('🔑 URL email:', urlEmail)
+        console.log('🔑 URL link_key:', urlLinkKey)
+        
+        if (urlEmail && urlLinkKey) {
+          return {
+            email: decodeURIComponent(urlEmail),
+            linkKey: urlLinkKey
+          }
+        }
+      }
+      return null
+    }
+    
+    // Try URL parameters first (for invited users)
+    const urlParams = getUrlParams()
+    if (urlParams) {
+      console.log('✅ Found URL parameters for invited user')
+      setEmail(urlParams.email)
+      setLinkKey(urlParams.linkKey)
       return
     }
     
-    setLinkKey(storedLinkKey)
-    setEmail(storedEmail)
+    // Fallback to session storage (for existing password reset flow)
+    const storedLinkKey = sessionStorage.getItem('passwordResetLinkKey')
+    const storedEmail = sessionStorage.getItem('passwordResetEmail')
+    
+    console.log('🔑 Stored link_key:', storedLinkKey)
+    console.log('🔑 Stored email:', storedEmail)
+    
+    if (storedLinkKey && storedEmail) {
+      console.log('✅ Found session storage parameters')
+      setLinkKey(storedLinkKey)
+      setEmail(storedEmail)
+      return
+    }
+    
+    // No valid parameters found
+    console.log('❌ No valid password creation parameters found')
+    setError('Invalid access. Missing required parameters.')
   }, [])
 
   const validateForm = () => {

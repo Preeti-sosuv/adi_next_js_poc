@@ -32,19 +32,56 @@ export default function ResetPassword() {
 
   const searchParams = useSearchParams()
 
-  // Get link_key and email from URL parameters on component mount
+  // Get link_key and email from URL hash parameters
   useEffect(() => {
-    const urlLinkKey = searchParams.get('link_key')
-    const urlEmail = searchParams.get('email')
+    console.log('🔑 Reset password page loaded')
     
-    if (!urlLinkKey || !urlEmail) {
-      console.log('No link_key or email in URL, redirecting to signin')
-      window.location.href = '/signin'
+    // Parse URL hash parameters (for links like #?email=...&link_key=...)
+    const getUrlParams = () => {
+      const hash = window.location.hash
+      console.log('🔑 URL hash:', hash)
+      
+      if (hash.includes('?')) {
+        const queryString = hash.split('?')[1]
+        const urlParams = new URLSearchParams(queryString)
+        const urlEmail = urlParams.get('email')
+        const urlLinkKey = urlParams.get('link_key')
+        
+        console.log('🔑 URL email:', urlEmail)
+        console.log('🔑 URL link_key:', urlLinkKey)
+        
+        if (urlEmail && urlLinkKey) {
+          return {
+            email: decodeURIComponent(urlEmail),
+            linkKey: urlLinkKey
+          }
+        }
+      }
+      return null
+    }
+    
+    // Try hash parameters first (for reset password links)
+    const urlParams = getUrlParams()
+    if (urlParams) {
+      console.log('✅ Found hash parameters for password reset')
+      setEmail(urlParams.email)
+      setLinkKey(urlParams.linkKey)
       return
     }
     
-    setLinkKey(urlLinkKey)
-    setEmail(urlEmail)
+    // Fallback to query parameters (for backward compatibility)
+    const urlLinkKey = searchParams?.get('link_key')
+    const urlEmail = searchParams?.get('email')
+    
+    if (urlLinkKey && urlEmail) {
+      console.log('✅ Found query parameters for password reset')
+      setLinkKey(urlLinkKey)
+      setEmail(urlEmail)
+      return
+    }
+    
+    console.log('❌ No valid reset password parameters found, redirecting to signin')
+    window.location.href = '/signin'
   }, [searchParams])
 
   const validateForm = () => {

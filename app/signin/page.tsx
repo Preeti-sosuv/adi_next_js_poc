@@ -203,7 +203,10 @@ export default function SignIn() {
       
       if (token) {
         // Extract additional user data from response
-        const userDetails = responseData.result || null
+        const userDetails = {
+          ...responseData.result,
+          email: email // Include the user's email from the form
+        }
         const expiry = userDetails?.expiry || null
         
         // Store authentication data with expiry and user details
@@ -271,14 +274,53 @@ export default function SignIn() {
     e.preventDefault()
     setForgotPasswordLoading(true)
     
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1500))
-    
-    console.log('Password reset email sent to:', forgotPasswordEmail)
-    alert(`Password reset instructions have been sent to ${forgotPasswordEmail}`)
-    
-    setForgotPasswordLoading(false)
-    handleForgotPasswordClose()
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL
+      console.log('🔄 Sending password reset email to:', forgotPasswordEmail)
+      
+      if (!baseUrl) {
+        throw new Error('API base URL not configured')
+      }
+
+      const requestUrl = `${baseUrl}/send_password_reset_email_v2`
+      const requestBody = {
+        user_email: forgotPasswordEmail.trim()
+      }
+
+      console.log('📡 Making password reset API call to:', requestUrl)
+      console.log('📡 Request body:', requestBody)
+
+      const response = await fetch(requestUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody)
+      })
+
+      console.log('📡 Password reset API response status:', response.status)
+      console.log('📡 Password reset API response ok:', response.ok)
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('❌ Password reset API error response:', errorText)
+        throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`)
+      }
+
+      const responseData = await response.json()
+      console.log('✅ Password reset API response:', responseData)
+
+      // Handle successful response
+      console.log('✅ Password reset email sent to:', forgotPasswordEmail)
+      alert(`Password reset instructions have been sent to ${forgotPasswordEmail}. Please check your email for the reset link.`)
+      
+    } catch (error) {
+      console.error('❌ Password reset error:', error)
+      alert('Failed to send password reset email: ' + (error instanceof Error ? error.message : 'Unknown error'))
+    } finally {
+      setForgotPasswordLoading(false)
+      handleForgotPasswordClose()
+    }
   }
 
   return (

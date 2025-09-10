@@ -314,10 +314,97 @@ export default function ManageTab() {
     handleCloseModal()
   }
 
-  const handleSendInvite = () => {
-    console.log('Send invite to user:', { email: newUserEmail })
-    // Add logic to send user invite
-    handleCloseModal()
+  const handleSendInvite = async () => {
+    console.log('🚀 ADD USER STARTED')
+    console.log('Adding user:', { email: newUserEmail })
+    
+    if (!newUserEmail.trim()) {
+      console.log('❌ Email is required')
+      return
+    }
+
+    setIsLoading(true)
+    
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL
+      console.log('🌐 Base URL from env:', baseUrl)
+      
+      if (!baseUrl) {
+        throw new Error('API base URL not configured')
+      }
+
+      // Get current user's token from auth data
+      const authData = getAuthData()
+      const token = authData?.token
+      
+      console.log('🔑 Using token:', token)
+      
+      if (!token) {
+        throw new Error('No authentication token found. Please sign in again.')
+      }
+
+      const requestUrl = `${baseUrl}/add_user_v2`
+      const requestBody = {
+        user: newUserEmail.trim(),
+        token: token
+      }
+      
+      console.log('📡 Making add user API call to:', requestUrl)
+      console.log('📡 Request body:', { user: newUserEmail.trim(), token: 'hidden' })
+
+      const response = await fetch(requestUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody)
+      })
+
+      console.log('📡 Add user API response status:', response.status)
+      console.log('📡 Add user API response ok:', response.ok)
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('❌ Add user API error response:', errorText)
+        throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`)
+      }
+
+      const responseData = await response.json()
+      console.log('✅ Add user API response:', responseData)
+
+      // Handle API response format: { result: [authed, status] }
+      if (response.status === 200 && responseData.result && Array.isArray(responseData.result)) {
+        const [authed, status] = responseData.result
+        console.log('📊 Response details:')
+        console.log('  - authed (first boolean):', authed)
+        console.log('  - Status (second boolean):', status)
+        
+        if (status === true) {
+          console.log('🎉 User added successfully and invite link sent!')
+          alert(`User ${newUserEmail} added successfully! Invite link has been sent.`)
+        } else if (authed === true) {
+          console.log('✅ User added but invite link not sent')
+          alert(`User ${newUserEmail} added successfully, but invite link was not sent.`)
+        } else {
+          console.log('⚠️ User addition may have failed')
+          alert(`User ${newUserEmail} could not be added. Please try again.`)
+        }
+        
+        handleCloseModal()
+        // Refresh the users list
+        handleRefresh()
+      } else {
+        console.log('⚠️ Unexpected response format:', responseData)
+        alert(`User ${newUserEmail} has been processed, but response format was unexpected.`)
+        handleCloseModal()
+      }
+
+    } catch (error) {
+      console.error('❌ Add user error:', error)
+      alert('Failed to add user: ' + (error instanceof Error ? error.message : 'Unknown error'))
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const handleSaveRole = () => {
@@ -569,7 +656,7 @@ export default function ManageTab() {
   return (
     <Box sx={{ display: 'flex', height: '100vh', m: 0, p: 0 }}>
       {/* Sidebar */}
-      <Box sx={{ width: 280, borderRight: 1, borderColor: 'divider', backgroundColor: 'background.paper' }}>
+      <Box sx={{ width: 280, borderRight: 1, borderColor: 'divider', backgroundColor: 'background.paper', m: 0, p: 0 }}>
         <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
           <Typography variant="h6" sx={{ fontWeight: 600, textTransform: 'uppercase', color: 'text.secondary', fontSize: '0.875rem' }}>
             MANAGE
@@ -645,8 +732,8 @@ export default function ManageTab() {
         </Box>
 
         {/* Content */}
-        <Box sx={{ p: 0 }}>
-          <Paper elevation={1} sx={{ borderRadius: 0, m: 0 }}>
+        <Box sx={{ p: 0, m: 0 }}>
+          <Paper elevation={0} sx={{ borderRadius: 0, m: 0, boxShadow: 'none' }}>
             {renderTable()}
           </Paper>
         </Box>
@@ -816,13 +903,15 @@ export default function ManageTab() {
             }
             variant="contained"
             disabled={
-              selectedSection === 'organizations' 
-                ? !newOrgName.trim() 
-                : selectedSection === 'departments'
-                  ? !newDeptName.trim()
-                  : selectedSection === 'users'
-                    ? !newUserEmail.trim()
-                    : !newRoleName.trim()
+              isLoading || (
+                selectedSection === 'organizations' 
+                  ? !newOrgName.trim() 
+                  : selectedSection === 'departments'
+                    ? !newDeptName.trim()
+                    : selectedSection === 'users'
+                      ? !newUserEmail.trim()
+                      : !newRoleName.trim()
+              )
             }
             sx={{
               textTransform: 'none',
@@ -830,7 +919,14 @@ export default function ManageTab() {
               px: 3,
             }}
           >
-            {selectedSection === 'users' ? 'Send Invite' : 'Save'}
+            {isLoading ? (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <CircularProgress size={16} color="inherit" />
+                {selectedSection === 'users' ? 'Adding User...' : 'Saving...'}
+              </Box>
+            ) : (
+              selectedSection === 'users' ? 'Add User' : 'Save'
+            )}
           </Button>
         </DialogActions>
       </Dialog>
