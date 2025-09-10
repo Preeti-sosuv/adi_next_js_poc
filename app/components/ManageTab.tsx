@@ -44,7 +44,7 @@ interface Organization {
   org_id: number
   parent_id?: number
   org_type: string
-  org_name: string
+  name: string
   default_dept_id?: number
   status: string
 }
@@ -69,10 +69,13 @@ interface Department {
 
 interface Role {
   id: number
+  org_id: string
+  dept_id: string
   name: string
-  permissions: string[]
-  users: number
-  status: 'Active' | 'Inactive'
+  description: string
+  role_type: string
+  security_id: number
+  status: string
 }
 
 
@@ -96,30 +99,12 @@ const usersData: User[] = [
 ]
 
 
-const rolesData: Role[] = [
-  {
-    id: 1,
-    name: 'Super Admin',
-    permissions: ['Read', 'Write', 'Delete', 'Manage'],
-    users: 2,
-    status: 'Active',
-  },
-  {
-    id: 2,
-    name: 'User',
-    permissions: ['Read'],
-    users: 15,
-    status: 'Active',
-  },
-]
 
 export default function ManageTab() {
   const [selectedSection, setSelectedSection] = useState('organizations')
   const [openModal, setOpenModal] = useState(false)
   const [newOrgName, setNewOrgName] = useState('')
-  const [newOrgDescription, setNewOrgDescription] = useState('')
   const [newDeptName, setNewDeptName] = useState('')
-  const [newDeptDescription, setNewDeptDescription] = useState('')
   const [newUserEmail, setNewUserEmail] = useState('')
   const [newRoleName, setNewRoleName] = useState('')
   const [newRoleDescription, setNewRoleDescription] = useState('')
@@ -127,6 +112,7 @@ export default function ManageTab() {
   // API data states
   const [organizations, setOrganizations] = useState<Organization[]>([])
   const [departments, setDepartments] = useState<Department[]>([])
+  const [roles, setRoles] = useState<Role[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -260,12 +246,79 @@ export default function ManageTab() {
     }
   }
 
+  // Fetch roles from API
+  const fetchRoles = async () => {
+    console.log('🎭 Fetching roles...')
+    setIsLoading(true)
+    setError('')
+    
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL
+      if (!baseUrl) {
+        throw new Error('API base URL not configured')
+      }
+
+      // Get token from auth data
+      const authData = getAuthData()
+      const token = authData?.token
+      
+      if (!token) {
+        throw new Error('No authentication token found')
+      }
+
+      const requestUrl = `${baseUrl}/get_roles`
+      const requestBody = {
+        token: token
+      }
+
+      console.log('🎭 Making get roles API call to:', requestUrl)
+      console.log('🎭 Request body:', { token: token.substring(0, 8) + '...' })
+
+      const response = await fetch(requestUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody)
+      })
+
+      console.log('🎭 Roles API response status:', response.status)
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('Roles API error response:', errorText)
+        throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`)
+      }
+
+      const responseData = await response.json()
+      console.log('🎭 Roles API response data:', responseData)
+
+      // Handle API response format: { "result": [true, [...roles]] }
+      if (responseData.result && Array.isArray(responseData.result) && responseData.result[0] === true) {
+        const rolesList = responseData.result[1] || []
+        console.log('🎭 Setting roles data:', rolesList)
+        setRoles(rolesList)
+      } else {
+        console.log('❌ Unexpected roles response format:', responseData)
+        setError('Unexpected response format from roles API')
+      }
+
+    } catch (error) {
+      console.error('❌ Error fetching roles:', error)
+      setError('Failed to load roles: ' + (error instanceof Error ? error.message : 'Unknown error'))
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   // Load data when component mounts or when section is selected
   useEffect(() => {
     if (selectedSection === 'organizations') {
       fetchOrganizations()
     } else if (selectedSection === 'departments') {
       fetchDepartments()
+    } else if (selectedSection === 'roles') {
+      fetchRoles()
     }
   }, [selectedSection])
 
@@ -273,7 +326,7 @@ export default function ManageTab() {
     { id: 'organizations', label: 'Organizations', icon: <Business />, data: organizations },
     { id: 'departments', label: 'Departments', icon: <Apartment />, data: departments },
     { id: 'users', label: 'Users', icon: <People />, data: usersData },
-    { id: 'roles', label: 'Roles', icon: <AdminPanelSettings />, data: rolesData },
+    { id: 'roles', label: 'Roles', icon: <AdminPanelSettings />, data: roles },
   ]
 
   const currentSection = sections.find(s => s.id === selectedSection)
@@ -294,24 +347,158 @@ export default function ManageTab() {
   const handleCloseModal = () => {
     setOpenModal(false)
     setNewOrgName('')
-    setNewOrgDescription('')
     setNewDeptName('')
-    setNewDeptDescription('')
     setNewUserEmail('')
     setNewRoleName('')
     setNewRoleDescription('')
   }
 
-  const handleSaveOrganization = () => {
-    console.log('Save organization:', { name: newOrgName, description: newOrgDescription })
-    // Add logic to save organization
-    handleCloseModal()
+  const handleSaveOrganization = async () => {
+    console.log('🏢 ADD ORGANIZATION STARTED')
+    console.log('Save organization:', { name: newOrgName })
+    
+    if (!newOrgName.trim()) {
+      console.log('❌ Organization name is required')
+      return
+    }
+
+    setIsLoading(true)
+    setError('')
+    
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL
+      if (!baseUrl) {
+        throw new Error('API base URL not configured')
+      }
+
+      // Get token from auth data
+      const authData = getAuthData()
+      const token = authData?.token
+      
+      if (!token) {
+        throw new Error('No authentication token found')
+      }
+
+      const requestUrl = `${baseUrl}/validate_save_org`
+      const requestBody = {
+        token: token,
+        org: newOrgName.trim()
+      }
+
+      console.log('🏢 Making validate_save_org API call to:', requestUrl)
+      console.log('🏢 Request body:', { token: token.substring(0, 8) + '...', org: newOrgName.trim() })
+
+      const response = await fetch(requestUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody)
+      })
+
+      console.log('🏢 Add organization API response status:', response.status)
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('Add organization API error response:', errorText)
+        throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`)
+      }
+
+      const responseData = await response.json()
+      console.log('🏢 Add organization API response data:', responseData)
+
+      // Handle API response format: { "result": [true, true] }
+      if (responseData.result && Array.isArray(responseData.result) && responseData.result[0] === true && responseData.result[1] === true) {
+        console.log('✅ Organization created successfully')
+        alert(`Organization "${newOrgName}" created successfully!`)
+        handleCloseModal()
+        // Refresh organizations list
+        fetchOrganizations()
+      } else {
+        console.log('❌ Unexpected response format or error:', responseData)
+        throw new Error('Failed to create organization - invalid response from server')
+      }
+
+    } catch (error) {
+      console.error('❌ Error creating organization:', error)
+      alert('Failed to create organization: ' + (error instanceof Error ? error.message : 'Unknown error'))
+    } finally {
+      setIsLoading(false)
+    }
   }
 
-  const handleSaveDepartment = () => {
-    console.log('Save department:', { name: newDeptName, description: newDeptDescription })
-    // Add logic to save department
-    handleCloseModal()
+  const handleSaveDepartment = async () => {
+    console.log('🏬 ADD DEPARTMENT STARTED')
+    console.log('Save department:', { name: newDeptName })
+    
+    if (!newDeptName.trim()) {
+      console.log('❌ Department name is required')
+      return
+    }
+
+    setIsLoading(true)
+    setError('')
+    
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL
+      if (!baseUrl) {
+        throw new Error('API base URL not configured')
+      }
+
+      // Get token from auth data
+      const authData = getAuthData()
+      const token = authData?.token
+      
+      if (!token) {
+        throw new Error('No authentication token found')
+      }
+
+      const requestUrl = `${baseUrl}/validate_save_dept`
+      const requestBody = {
+        token: token,
+        dept: newDeptName.trim()
+      }
+
+      console.log('🏬 Making validate_save_dept API call to:', requestUrl)
+      console.log('🏬 Request body:', { token: token.substring(0, 8) + '...', dept: newDeptName.trim() })
+
+      const response = await fetch(requestUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody)
+      })
+
+      console.log('🏬 Add department API response status:', response.status)
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('Add department API error response:', errorText)
+        throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`)
+      }
+
+      const responseData = await response.json()
+      console.log('🏬 Add department API response data:', responseData)
+
+      // Handle API response format: { "result": [true, true] }
+      if (responseData.result && Array.isArray(responseData.result) && responseData.result[0] === true && responseData.result[1] === true) {
+        console.log('✅ Department created successfully')
+        alert(`Department "${newDeptName}" added successfully!`)
+        handleCloseModal()
+        // Refresh departments list
+        fetchDepartments()
+      } else {
+        console.log('❌ Unexpected response format or error:', responseData)
+        throw new Error('Failed to create department - invalid response from server')
+      }
+
+    } catch (error) {
+      console.error('❌ Error creating department:', error)
+      alert('Failed to create department: ' + (error instanceof Error ? error.message : 'Unknown error'))
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const handleSendInvite = async () => {
@@ -427,8 +614,10 @@ export default function ManageTab() {
       fetchOrganizations()
     } else if (selectedSection === 'departments') {
       fetchDepartments()
+    } else if (selectedSection === 'roles') {
+      fetchRoles()
     }
-    // Add other refresh handlers for users, roles as needed
+    // Add other refresh handlers for users as needed
   }
 
   const renderTable = () => {
@@ -474,9 +663,9 @@ export default function ManageTab() {
                   ) : (
                     organizations.map((org) => (
                       <TableRow key={org.org_id} hover>
-                        <TableCell>{org.parent_id || '-'}</TableCell>
+                        <TableCell>{org.org_owner || '-'}</TableCell>
                         <TableCell>{org.org_id}</TableCell>
-                        <TableCell sx={{ fontWeight: 500 }}>{org.org_name}</TableCell>
+                        <TableCell sx={{ fontWeight: 500 }}>{org.name}</TableCell>
                         <TableCell>
                           <Chip label={org.org_type} color={getTypeColor(org.org_type) as any} size="small" />
                         </TableCell>
@@ -607,45 +796,60 @@ export default function ManageTab() {
 
       case 'roles':
         return (
-          <TableContainer>
-            <Table>
-              <TableHead>
-                <TableRow sx={{ backgroundColor: 'grey.100' }}>
-                  <TableCell sx={{ fontWeight: 600 }}>Name</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>Permissions</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>Users</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>Status</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }} align="right">Actions</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {(currentData as Role[]).map((role) => (
-                  <TableRow key={role.id} hover>
-                    <TableCell sx={{ fontWeight: 500 }}>{role.name}</TableCell>
-                    <TableCell>
-                      <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-                        {role.permissions.map((perm, index) => (
-                          <Chip key={index} label={perm} size="small" variant="outlined" />
-                        ))}
-                      </Box>
-                    </TableCell>
-                    <TableCell>{role.users}</TableCell>
-                    <TableCell>
-                      <Chip label={role.status} color={getStatusColor(role.status) as any} size="small" />
-                    </TableCell>
-                    <TableCell align="right">
-                      <IconButton size="small" onClick={() => handleEdit(role.id)}>
-                        <Edit fontSize="small" />
-                      </IconButton>
-                      <IconButton size="small" onClick={() => handleDelete(role.id)}>
-                        <Delete fontSize="small" />
-                      </IconButton>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
+          <>
+            {error && (
+              <Alert severity="error" sx={{ mb: 2 }}>
+                {error}
+              </Alert>
+            )}
+            {isLoading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+                <CircularProgress />
+              </Box>
+            ) : (
+              <TableContainer>
+                <Table>
+                  <TableHead>
+                    <TableRow sx={{ backgroundColor: 'grey.100' }}>
+                      <TableCell sx={{ fontWeight: 600 }}>Name</TableCell>
+                      <TableCell sx={{ fontWeight: 600 }}>Description</TableCell>
+                      <TableCell sx={{ fontWeight: 600 }}>Role Type</TableCell>
+                      <TableCell sx={{ fontWeight: 600 }}>Organization ID</TableCell>
+                      <TableCell sx={{ fontWeight: 600 }}>Department ID</TableCell>
+                      <TableCell sx={{ fontWeight: 600 }}>Security ID</TableCell>
+                      <TableCell sx={{ fontWeight: 600 }}>Status</TableCell>
+                      <TableCell sx={{ fontWeight: 600 }} align="right">Actions</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {(currentData as Role[]).map((role) => (
+                      <TableRow key={role.id} hover>
+                        <TableCell sx={{ fontWeight: 500 }}>{role.name}</TableCell>
+                        <TableCell>{role.description}</TableCell>
+                        <TableCell>
+                          <Chip label={role.role_type} color={getTypeColor(role.role_type) as any} size="small" />
+                        </TableCell>
+                        <TableCell>{role.org_id}</TableCell>
+                        <TableCell>{role.dept_id}</TableCell>
+                        <TableCell>{role.security_id}</TableCell>
+                        <TableCell>
+                          <Chip label={role.status} color={getStatusColor(role.status) as any} size="small" />
+                        </TableCell>
+                        <TableCell align="right">
+                          <IconButton size="small" onClick={() => handleEdit(role.id)}>
+                            <Edit fontSize="small" />
+                          </IconButton>
+                          <IconButton size="small" onClick={() => handleDelete(role.id)}>
+                            <Delete fontSize="small" />
+                          </IconButton>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
+          </>
         )
 
       default:
@@ -853,28 +1057,6 @@ export default function ManageTab() {
                 />
               </Box>
               
-              <Box>
-                <TextField
-                  fullWidth
-                  placeholder="Description (optional)"
-                  value={selectedSection === 'organizations' ? newOrgDescription : newDeptDescription}
-                  onChange={(e) => {
-                    if (selectedSection === 'organizations') {
-                      setNewOrgDescription(e.target.value)
-                    } else {
-                      setNewDeptDescription(e.target.value)
-                    }
-                  }}
-                  variant="outlined"
-                  multiline
-                  rows={3}
-                  sx={{
-                    '& .MuiOutlinedInput-root': {
-                      borderRadius: 2,
-                    }
-                  }}
-                />
-              </Box>
             </Box>
           )}
         </DialogContent>
