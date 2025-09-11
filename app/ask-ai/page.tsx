@@ -25,7 +25,7 @@ export default function AskAI() {
   useEffect(() => {
     if (!isAuthenticated()) {
       console.log('User not authenticated, redirecting to signin')
-      window.location.href = '/signin'
+      window.location.href = '/signin?expired=true'
       return
     }
   }, [])

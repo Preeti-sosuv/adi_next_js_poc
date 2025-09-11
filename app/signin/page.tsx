@@ -20,6 +20,7 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  Alert,
 } from '@mui/material'
 import {
   Visibility,
@@ -33,6 +34,8 @@ export default function SignIn() {
   const [showPassword, setShowPassword] = useState(false)
   const [rememberMe, setRememberMe] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [isNewUser, setIsNewUser] = useState(false)
   const [forgotPasswordOpen, setForgotPasswordOpen] = useState(false)
   const [forgotPasswordEmail, setForgotPasswordEmail] = useState('')
   const [forgotPasswordLoading, setForgotPasswordLoading] = useState(false)
@@ -51,13 +54,29 @@ export default function SignIn() {
     console.log('localStorage authData:', localStorage.getItem('authData'))
     console.log('sessionStorage authData:', sessionStorage.getItem('authData'))
     
-    const authStatus = isAuthenticated()
-    console.log('🔐 isAuthenticated() result:', authStatus)
+    // Check URL parameters
+    const urlParams = new URLSearchParams(window.location.search)
+    const fromAuthFailure = urlParams.get('expired') === 'true'
+    const newUser = urlParams.get('newuser') === 'true'
     
-    if (authStatus) {
-      console.log('⚠️ User already authenticated, redirecting to ask-ai')
-      console.log('⚠️ This might be preventing the sign-in API call!')
-      window.location.href = '/ask-ai'
+    if (fromAuthFailure) {
+      console.log('🔄 User came from auth failure, clearing auth data and showing signin form')
+      // Clear potentially corrupted auth data
+      import('../utils/auth').then(({ clearAuthData }) => {
+        clearAuthData()
+      })
+    } else if (newUser) {
+      console.log('🆕 New user just created password, ready for signin')
+      // No message shown to user
+    } else {
+      const authStatus = isAuthenticated()
+      console.log('🔐 isAuthenticated() result:', authStatus)
+      
+      if (authStatus) {
+        console.log('⚠️ User already authenticated, redirecting to ask-ai')
+        window.location.href = '/ask-ai'
+        return
+      }
     }
   }, [])
 
@@ -67,6 +86,8 @@ export default function SignIn() {
     console.log('Form submitted with:', { email, password })
     console.log('Form validation passed, proceeding with API call...')
     setIsLoading(true)
+    setError('')
+    setIsNewUser(false)
     
     try {
       // Get base URL from environment
@@ -116,6 +137,13 @@ export default function SignIn() {
       const responseData = await response.json()
       console.log('API Response:', responseData)
       console.log('Response type:', typeof responseData)
+      
+      // Check for null response
+      if (!responseData) {
+        console.error('🚨 API returned null response')
+        setError('Server returned empty response. Please try again.')
+        return
+      }
       console.log('Response keys:', Object.keys(responseData || {}))
       
       // Extract and store token from response
@@ -200,14 +228,12 @@ export default function SignIn() {
           ...responseData.result,
           email: email // Include the user's email from the form
         }
-        const expiry = userDetails?.expiry || null
         
-        // Store authentication data with expiry and user details
-        storeAuthData(token, expiry, userDetails)
+        // Store authentication data without expiry management
+        storeAuthData(token, null, userDetails)
         
         console.log('Authentication successful:', {
           token,
-          expiry,
           userDetails,
           message: responseData.result?.message
         })
@@ -224,10 +250,13 @@ export default function SignIn() {
         
         // Check if API returned a specific error message
         if (responseData.result?.message) {
-          alert(`Sign in response: ${responseData.result.message}`)
+          setError(responseData.result.message)
         } else {
-          alert('Sign in failed: No authentication token received')
+          setError('Sign in failed: Invalid credentials or no authentication token received')
         }
+        
+        // For debugging, show the full response structure
+        console.log('Full API response for debugging:', JSON.stringify(responseData, null, 2))
       }
       
     } catch (error) {
@@ -239,9 +268,9 @@ export default function SignIn() {
       // Check if it's a network error
       if (error instanceof TypeError && error.message.includes('fetch')) {
         console.error('Network error detected - possibly CORS or server not running')
-        alert('Network Error: Unable to connect to server. Please check if the API server is running at ' + process.env.NEXT_PUBLIC_API_BASE_URL)
+        setError('Network Error: Unable to connect to server. Please check if the API server is running.')
       } else {
-        alert('Sign in failed: ' + (error instanceof Error ? error.message : 'Unknown error'))
+        setError('Sign in failed: ' + (error instanceof Error ? error.message : 'Unknown error'))
       }
     }
     
@@ -360,6 +389,12 @@ export default function SignIn() {
               </Typography>
               
             </Box>
+
+            {error && (
+              <Alert severity={isNewUser ? "info" : "error"} sx={{ mb: 3, width: '100%' }}>
+                {error}
+              </Alert>
+            )}
 
             <Box component="form" onSubmit={handleSubmit} sx={{ width: '100%' }}>
               <TextField

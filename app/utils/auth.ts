@@ -7,8 +7,8 @@ export interface AuthData {
   timestamp: number
 }
 
-// Store authentication data with expiry
-export const storeAuthData = (token: string, expiry?: string, userDetails?: any): void => {
+// Store authentication data without expiry management
+export const storeAuthData = (token: string, expiry?: string | null, userDetails?: any): void => {
   const authData: AuthData = {
     token,
     expiry: expiry || '',
@@ -27,7 +27,7 @@ export const storeAuthData = (token: string, expiry?: string, userDetails?: any)
   sessionStorage.setItem('authToken', token)
 }
 
-// Get stored authentication data
+// Get stored authentication data (without expiry checks)
 export const getAuthData = (): AuthData | null => {
   try {
     // Try localStorage first (persistent)
@@ -40,19 +40,6 @@ export const getAuthData = (): AuthData | null => {
     
     if (authDataStr) {
       const authData: AuthData = JSON.parse(authDataStr)
-      
-      // Check if token has expired (if expiry is provided)
-      if (authData.expiry) {
-        const expiryDate = new Date(authData.expiry)
-        const now = new Date()
-        
-        if (now >= expiryDate) {
-          console.log('Token has expired, clearing auth data')
-          clearAuthData()
-          return null
-        }
-      }
-      
       return authData
     }
   } catch (error) {
@@ -74,9 +61,10 @@ export const getAuthToken = (): string | null => {
   return localStorage.getItem('authToken') || sessionStorage.getItem('authToken')
 }
 
-// Check if user is authenticated
+// Check if user is authenticated (simple token check)
 export const isAuthenticated = (): boolean => {
-  return getAuthToken() !== null
+  const authData = getAuthData()
+  return authData !== null && !!authData.token
 }
 
 // Clear all authentication data
@@ -110,35 +98,3 @@ export const validateToken = async (token: string): Promise<boolean> => {
   }
 }
 
-// Auto-logout when token expires
-export const setupTokenExpiryCheck = (): void => {
-  const checkTokenExpiry = () => {
-    const authData = getAuthData()
-    if (!authData) return
-    
-    if (authData.expiry) {
-      const expiryDate = new Date(authData.expiry)
-      const now = new Date()
-      const timeUntilExpiry = expiryDate.getTime() - now.getTime()
-      
-      // If token expires in less than 5 minutes, show warning
-      if (timeUntilExpiry < 5 * 60 * 1000 && timeUntilExpiry > 0) {
-        console.warn('Token expires in less than 5 minutes')
-        // You could show a renewal prompt here
-      }
-      
-      // If token has expired, redirect to login
-      if (timeUntilExpiry <= 0) {
-        console.log('Token expired, redirecting to login')
-        clearAuthData()
-        window.location.href = '/signin'
-      }
-    }
-  }
-  
-  // Check every minute
-  setInterval(checkTokenExpiry, 60000)
-  
-  // Check immediately
-  checkTokenExpiry()
-}

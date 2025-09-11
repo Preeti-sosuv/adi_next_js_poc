@@ -199,9 +199,8 @@ export default function CreatePassword() {
         sessionStorage.removeItem('passwordResetLinkKey')
         sessionStorage.removeItem('passwordResetEmail')
 
-        // Show success message and redirect to signin
-        alert('Password reset successfully! Please sign in with your new password.')
-        window.location.href = '/signin'
+        // Immediately redirect to signin page
+        window.location.href = '/signin?newuser=true'
       } else {
         console.log('❌ Unexpected response format:', responseData)
         setError('Password reset failed. Please try again.')

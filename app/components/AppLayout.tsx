@@ -28,6 +28,7 @@ import {
   Help,
   ChevronRight,
 } from '@mui/icons-material'
+import ServiceStatusPopup from './ServiceStatusPopup'
 
 const drawerWidth = 72
 
@@ -38,9 +39,14 @@ interface AppLayoutProps {
 export default function AppLayout({ children }: AppLayoutProps) {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
   const [orgAnchorEl, setOrgAnchorEl] = useState<null | HTMLElement>(null)
+  const [deptAnchorEl, setDeptAnchorEl] = useState<null | HTMLElement>(null)
+  const [serviceStatusOpen, setServiceStatusOpen] = useState(false)
   const [userEmail, setUserEmail] = useState<string>('')
   const [organizations, setOrganizations] = useState<any[]>([])
+  const [departments, setDepartments] = useState<any[]>([])
   const [selectedOrg, setSelectedOrg] = useState<string>('AUTOMATED DATA')
+  const [selectedOrgId, setSelectedOrgId] = useState<number | null>(null)
+  const [selectedDept, setSelectedDept] = useState<string>('')
   const pathname = usePathname()
 
   // Get user email and fetch organizations
@@ -88,19 +94,92 @@ export default function AppLayout({ children }: AppLayoutProps) {
 
       if (response.ok) {
         const responseData = await response.json()
+        
+        // Handle null response (expired token)
+        if (!responseData) {
+          console.log('Null response - token expired, redirecting to signin')
+          window.location.href = '/signin?expired=true'
+          return
+        }
+        
         if (responseData.result && Array.isArray(responseData.result) && responseData.result[0] === true) {
           const orgsList = responseData.result[1] || []
           setOrganizations(orgsList)
           // Set the first organization as selected if available
           if (orgsList.length > 0) {
             setSelectedOrg(orgsList[0].name)
+            setSelectedOrgId(orgsList[0].org_id)
+            // Automatically fetch departments for the first organization
+            fetchDepartments(orgsList[0].org_id)
           }
+        } else if (responseData.result && Array.isArray(responseData.result) && responseData.result[0] === false) {
+          // API returned error - likely expired token
+          console.log('API returned error - token likely expired, redirecting to signin')
+          window.location.href = '/signin?expired=true'
+          return
         }
+      } else if (response.status === 401 || response.status === 403) {
+        console.log('Unauthorized response, redirecting to signin')
+        window.location.href = '/signin'
+        return
       }
     } catch (error) {
       console.error('Error fetching organizations:', error)
     }
   }
+
+  const fetchDepartments = async (orgId: number) => {
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL
+      const authData = getAuthData()
+      const token = authData?.token
+      
+      if (!baseUrl || !token) return
+
+      const response = await fetch(`${baseUrl}/get_depts`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          org_id: orgId,
+          token: token
+        })
+      })
+
+      if (response.ok) {
+        const responseData = await response.json()
+        
+        // Handle null response (expired token)
+        if (!responseData) {
+          console.log('Departments API - Null response, token expired, redirecting to signin')
+          window.location.href = '/signin?expired=true'
+          return
+        }
+        
+        if (responseData.result && Array.isArray(responseData.result) && responseData.result[0] === true) {
+          const deptsList = responseData.result[1] || []
+          setDepartments(deptsList)
+          // Set the first department as selected if available
+          if (deptsList.length > 0) {
+            setSelectedDept(deptsList[0].name)
+          }
+        } else if (responseData.result && Array.isArray(responseData.result) && responseData.result[0] === false) {
+          // API returned error - likely expired token
+          console.log('Departments API - returned error, token likely expired, redirecting to signin')
+          window.location.href = '/signin?expired=true'
+          return
+        }
+      } else if (response.status === 401 || response.status === 403) {
+        console.log('Departments API - Unauthorized, redirecting to signin')
+        window.location.href = '/signin'
+        return
+      }
+    } catch (error) {
+      console.error('Error fetching departments:', error)
+    }
+  }
+
 
   const handleProfileMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget)
@@ -118,6 +197,14 @@ export default function AppLayout({ children }: AppLayoutProps) {
     setOrgAnchorEl(null)
   }
 
+  const handleDeptMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
+    setDeptAnchorEl(event.currentTarget)
+  }
+
+  const handleDeptMenuClose = () => {
+    setDeptAnchorEl(null)
+  }
+
   const handleLogout = () => {
     // Import clearAuthData dynamically to avoid issues
     import('../utils/auth').then(({ clearAuthData }) => {
@@ -126,6 +213,16 @@ export default function AppLayout({ children }: AppLayoutProps) {
       console.log('User logged out, clearing auth data')
       window.location.href = '/signin'
     })
+  }
+
+  const handleServiceStatusClick = () => {
+    setServiceStatusOpen(true)
+    handleProfileMenuClose()
+  }
+
+  const handleHelpClick = () => {
+    window.open('https://automated-data-inc.gitbook.io/docs/deployment', '_blank')
+    handleProfileMenuClose()
   }
 
   const menuItems = [
@@ -282,6 +379,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
         </MenuItem>
 
         <MenuItem 
+          onClick={handleDeptMenuOpen}
           sx={{ 
             py: 1.5, 
             px: 2,
@@ -300,6 +398,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
         </MenuItem>
 
         <MenuItem 
+          onClick={handleServiceStatusClick}
           sx={{ 
             py: 1.5, 
             px: 2,
@@ -317,6 +416,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
         </MenuItem>
 
         <MenuItem 
+          onClick={handleHelpClick}
           sx={{ 
             py: 1.5, 
             px: 2,
@@ -379,11 +479,6 @@ export default function AppLayout({ children }: AppLayoutProps) {
           }
         }}
       >
-        <Box sx={{ p: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
-          <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'text.primary' }}>
-            Select Organization
-          </Typography>
-        </Box>
 
         {organizations.length > 0 ? (
           organizations.map((org) => (
@@ -391,6 +486,8 @@ export default function AppLayout({ children }: AppLayoutProps) {
               key={org.id}
               onClick={() => {
                 setSelectedOrg(org.name)
+                setSelectedOrgId(org.org_id)
+                fetchDepartments(org.org_id)
                 handleOrgMenuClose()
               }}
               sx={{ 
@@ -420,6 +517,72 @@ export default function AppLayout({ children }: AppLayoutProps) {
           <MenuItem sx={{ py: 1.5, px: 2 }}>
             <Typography variant="body2" color="text.secondary">
               No organizations available
+            </Typography>
+          </MenuItem>
+        )}
+      </Menu>
+
+      {/* Department Menu */}
+      <Menu
+        anchorEl={deptAnchorEl}
+        open={Boolean(deptAnchorEl)}
+        onClose={handleDeptMenuClose}
+        anchorOrigin={{
+          vertical: 'top',
+          horizontal: 'right',
+        }}
+        transformOrigin={{
+          vertical: 'top',
+          horizontal: 'left',
+        }}
+        slotProps={{
+          paper: {
+            sx: {
+              borderRadius: 1,
+              minWidth: 250,
+              boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
+              border: '1px solid',
+              borderColor: 'divider',
+              ml: 0,
+            }
+          }
+        }}
+      >
+        {departments.length > 0 ? (
+          departments.map((dept) => (
+            <MenuItem 
+              key={dept.id}
+              onClick={() => {
+                setSelectedDept(dept.name)
+                handleDeptMenuClose()
+              }}
+              sx={{ 
+                py: 1.5, 
+                px: 2,
+                '&:hover': {
+                  backgroundColor: 'action.hover',
+                }
+              }}
+            >
+              <Typography 
+                variant="body2" 
+                sx={{ 
+                  flex: 1,
+                  color: selectedDept === dept.name ? 'primary.main' : 'text.primary',
+                  fontWeight: selectedDept === dept.name ? 500 : 400
+                }}
+              >
+                {dept.name}
+              </Typography>
+              {selectedDept === dept.name && (
+                <Box sx={{ ml: 1, color: 'primary.main' }}>✓</Box>
+              )}
+            </MenuItem>
+          ))
+        ) : (
+          <MenuItem sx={{ py: 1.5, px: 2 }}>
+            <Typography variant="body2" color="text.secondary">
+              No departments available
             </Typography>
           </MenuItem>
         )}
@@ -464,6 +627,12 @@ export default function AppLayout({ children }: AppLayoutProps) {
       >
         {children}
       </Box>
+
+      {/* Service Status Popup */}
+      <ServiceStatusPopup 
+        open={serviceStatusOpen} 
+        onClose={() => setServiceStatusOpen(false)} 
+      />
     </Box>
   )
 }

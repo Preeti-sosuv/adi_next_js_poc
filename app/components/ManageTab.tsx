@@ -31,6 +31,7 @@ import {
   Add,
   Edit,
   Delete,
+  Visibility,
   Business,
   Apartment,
   People,
@@ -56,6 +57,8 @@ interface User {
   role: string
   status: 'Active' | 'Inactive'
   lastLogin: string
+  org_id: number
+  dept_id: number
 }
 
 interface Department {
@@ -654,8 +657,131 @@ export default function ManageTab() {
     console.log(`Edit ${selectedSection}:`, id)
   }
 
-  const handleDelete = (id: number) => {
+  const handleView = (id: number) => {
+    console.log(`View user:`, id)
+    const userToView = users.find(user => user.id === id)
+    if (userToView) {
+      const userInfo = `
+User Details:
+━━━━━━━━━━━━━━━━━━━━
+👤 Name: ${userToView.name}
+🏢 Organization ID: ${userToView.org_id}
+🏬 Department ID: ${userToView.dept_id}
+📧 Email: ${userToView.email || 'N/A'}
+👔 Role: ${userToView.role || 'N/A'}
+✅ Status: ${userToView.status}
+🕐 Last Login: ${userToView.lastLogin || 'N/A'}
+      `.trim()
+      
+      alert(userInfo)
+    } else {
+      alert('User not found')
+    }
+  }
+
+  const handleDelete = async (id: number) => {
     console.log(`Delete ${selectedSection}:`, id)
+    
+    if (selectedSection === 'users') {
+      const userToDelete = users.find(user => user.id === id)
+      if (!userToDelete) {
+        alert('User not found')
+        return
+      }
+
+      const confirmDelete = confirm(`Are you sure you want to delete user "${userToDelete.name}"? This action cannot be undone.`)
+      if (!confirmDelete) {
+        return
+      }
+
+      console.log('🗑️ DELETE USER STARTED')
+      console.log('Deleting user:', { name: userToDelete.name })
+      
+      setIsLoading(true)
+      setError('')
+      
+      try {
+        const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL
+        if (!baseUrl) {
+          throw new Error('API base URL not configured')
+        }
+
+        const authData = getAuthData()
+        const token = authData?.token
+        
+        if (!token) {
+          throw new Error('No authentication token found')
+        }
+
+        const requestUrl = `${baseUrl}/delete_user_v2`
+        const requestBody = {
+          name: userToDelete.name,
+          token: token
+        }
+
+        console.log('🗑️ Making delete user API call to:', requestUrl)
+        console.log('🗑️ Request body:', { name: userToDelete.name, token: token.substring(0, 8) + '...' })
+
+        const response = await fetch(requestUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(requestBody)
+        })
+
+        console.log('🗑️ Delete user API response status:', response.status)
+
+        if (!response.ok) {
+          if (response.status === 401 || response.status === 403) {
+            console.log('Delete user API - Unauthorized, redirecting to signin')
+            window.location.href = '/signin?expired=true'
+            return
+          }
+          const errorText = await response.text()
+          console.error('Delete user API error response:', errorText)
+          throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`)
+        }
+
+        const responseData = await response.json()
+        console.log('🗑️ Delete user API response data:', responseData)
+
+        // Handle null response (expired token)
+        if (!responseData) {
+          console.log('Delete user API - Null response, token expired, redirecting to signin')
+          window.location.href = '/signin?expired=true'
+          return
+        }
+
+        // Handle API response format: { "result": [authed, success] }
+        if (responseData.result && Array.isArray(responseData.result) && responseData.result[0] === true) {
+          const success = responseData.result[1]
+          if (success === true) {
+            console.log('✅ User deleted successfully')
+            alert(`User "${userToDelete.name}" has been deleted successfully!`)
+            // Refresh users list
+            fetchUsers()
+          } else {
+            console.log('❌ User deletion failed')
+            alert(`Failed to delete user "${userToDelete.name}". Please try again.`)
+          }
+        } else if (responseData.result && Array.isArray(responseData.result) && responseData.result[0] === false) {
+          // API returned error - likely expired token
+          console.log('Delete user API - returned error, token likely expired, redirecting to signin')
+          window.location.href = '/signin?expired=true'
+          return
+        } else {
+          console.log('❌ Unexpected response format or error:', responseData)
+          throw new Error('Invalid response format from delete user API')
+        }
+
+      } catch (error) {
+        console.error('❌ Error deleting user:', error)
+        alert('Failed to delete user: ' + (error instanceof Error ? error.message : 'Unknown error'))
+      } finally {
+        setIsLoading(false)
+      }
+    }
   }
 
   const handleRefresh = () => {
@@ -782,8 +908,8 @@ export default function ManageTab() {
                         />
                       </TableCell>
                       <TableCell align="right">
-                        <IconButton size="small" onClick={() => handleEdit(user.id)}>
-                          <Edit fontSize="small" />
+                        <IconButton size="small" onClick={() => handleView(user.id)}>
+                          <Visibility fontSize="small" />
                         </IconButton>
                         <IconButton size="small" onClick={() => handleDelete(user.id)}>
                           <Delete fontSize="small" />
