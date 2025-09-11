@@ -26,6 +26,12 @@ import {
   DialogActions,
   CircularProgress,
   Alert,
+  Checkbox,
+  FormGroup,
+  FormControlLabel,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
 } from '@mui/material'
 import {
   Add,
@@ -36,6 +42,8 @@ import {
   People,
   AdminPanelSettings,
   Refresh,
+  Visibility,
+  ExpandMore,
 } from '@mui/icons-material'
 
 interface Organization {
@@ -97,6 +105,20 @@ export default function ManageTab() {
   const [roles, setRoles] = useState<Role[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
+  
+  // Role permissions modal states
+  const [viewRoleModalOpen, setViewRoleModalOpen] = useState(false)
+  const [selectedRoleId, setSelectedRoleId] = useState<number>(0)
+  const [roleFunctions, setRoleFunctions] = useState<any[]>([])
+  const [checkedFunctions, setCheckedFunctions] = useState<{[key: number]: boolean}>({})
+  
+  // Delete confirmation dialog states
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [roleToDelete, setRoleToDelete] = useState<Role | null>(null)
+  const [deleteOrgDialogOpen, setDeleteOrgDialogOpen] = useState(false)
+  const [orgToDelete, setOrgToDelete] = useState<Organization | null>(null)
+  const [deleteDeptDialogOpen, setDeleteDeptDialogOpen] = useState(false)
+  const [deptToDelete, setDeptToDelete] = useState<Department | null>(null)
 
   // Fetch organizations from API
   const fetchOrganizations = async () => {
@@ -644,19 +666,587 @@ export default function ManageTab() {
     }
   }
 
-  const handleSaveRole = () => {
+  const handleSaveRole = async () => {
+    console.log('🎭 ADD ROLE STARTED')
     console.log('Save role:', { name: newRoleName, description: newRoleDescription })
-    // Add logic to save role
-    handleCloseModal()
+    
+    if (!newRoleName.trim()) {
+      console.log('❌ Role name is required')
+      return
+    }
+
+    if (!newRoleDescription.trim()) {
+      console.log('❌ Role description is required')
+      return
+    }
+
+    setIsLoading(true)
+    setError('')
+    
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL
+      if (!baseUrl) {
+        throw new Error('API base URL not configured')
+      }
+
+      // Get token from auth data
+      const authData = getAuthData()
+      const token = authData?.token
+      
+      if (!token) {
+        throw new Error('No authentication token found')
+      }
+
+      const requestUrl = `${baseUrl}/validate_save_role`
+      const requestBody = {
+        token: token,
+        data: {
+          name: newRoleName.trim(),
+          description: newRoleDescription.trim()
+        }
+      }
+
+      console.log('🎭 Making validate_save_role API call to:', requestUrl)
+      console.log('🎭 Request body:', { 
+        token: token.substring(0, 8) + '...', 
+        data: { name: newRoleName.trim(), description: newRoleDescription.trim() }
+      })
+
+      const response = await fetch(requestUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody)
+      })
+
+      console.log('🎭 Add role API response status:', response.status)
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('Add role API error response:', errorText)
+        throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`)
+      }
+
+      const responseData = await response.json()
+      console.log('🎭 Add role API response data:', responseData)
+
+      // Handle API response format: { "result": [true, true] }
+      if (responseData.result && Array.isArray(responseData.result) && responseData.result[0] === true && responseData.result[1] === true) {
+        console.log('✅ Role created successfully')
+        alert(`Role "${newRoleName}" added successfully!`)
+        handleCloseModal()
+        // Refresh roles list
+        fetchRoles()
+      } else {
+        console.log('❌ Unexpected response format or error:', responseData)
+        throw new Error('Failed to create role - invalid response from server')
+      }
+
+    } catch (error) {
+      console.error('❌ Error creating role:', error)
+      alert('Failed to create role: ' + (error instanceof Error ? error.message : 'Unknown error'))
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const handleEdit = (id: number) => {
     console.log(`Edit ${selectedSection}:`, id)
   }
 
+  const handleViewRole = async (id: number) => {
+    console.log(`🎭 VIEW ROLE STARTED for role ID:`, id)
+    setIsLoading(true)
+    setError('')
+    
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL
+      if (!baseUrl) {
+        throw new Error('API base URL not configured')
+      }
+
+      // Get token from auth data
+      const authData = getAuthData()
+      const token = authData?.token
+      
+      if (!token) {
+        throw new Error('No authentication token found')
+      }
+
+      const requestUrl = `${baseUrl}/get_function_list_role`
+      const requestBody = {
+        token: token,
+        role: id
+      }
+
+      console.log('🎭 Making get_function_list_role API call to:', requestUrl)
+      console.log('🎭 Request body:', { token: token.substring(0, 8) + '...', role: id })
+
+      const response = await fetch(requestUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody)
+      })
+
+      console.log('🎭 View role API response status:', response.status)
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('View role API error response:', errorText)
+        throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`)
+      }
+
+      // Get response as text first to preserve large integers
+      const responseText = await response.text()
+      console.log('🎭 View role API response text:', responseText)
+      
+      // Replace large integers with quoted strings before JSON parsing to preserve precision
+      const modifiedResponseText = responseText.replace(
+        /"(org_id|dept_id)"\s*:\s*(\d{16,})/g,
+        '"$1": "$2"'
+      )
+      
+      const responseData = JSON.parse(modifiedResponseText)
+      console.log('🎭 View role API response data:', responseData)
+
+      // Handle API response format: { "result": [true, [...functions]] }
+      if (responseData.result && Array.isArray(responseData.result) && responseData.result[0] === true) {
+        const functionsList = responseData.result[1] || []
+        console.log('✅ Successfully fetched', functionsList.length, 'functions for role')
+        
+        // Set functions data and initialize checked state
+        setRoleFunctions(functionsList)
+        setSelectedRoleId(id)
+        
+        // Initialize checked functions based on API response
+        const initialChecked: {[key: number]: boolean} = {}
+        functionsList.forEach((func: any) => {
+          initialChecked[func.function_id] = func.ticked || false
+        })
+        setCheckedFunctions(initialChecked)
+        
+        setViewRoleModalOpen(true)
+      } else {
+        console.log('❌ Unexpected response format or error:', responseData)
+        throw new Error('Failed to fetch role functions - invalid response from server')
+      }
+
+    } catch (error) {
+      console.error('❌ Error fetching role functions:', error)
+      setError('Failed to load role functions: ' + (error instanceof Error ? error.message : 'Unknown error'))
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   const handleDelete = (id: number) => {
     console.log(`Delete ${selectedSection}:`, id)
+    
+    if (selectedSection === 'roles') {
+      // Find the role to delete
+      const role = roles.find(r => r.id === id)
+      if (role) {
+        setRoleToDelete(role)
+        setDeleteDialogOpen(true)
+      }
+    } else if (selectedSection === 'organizations') {
+      // Find the organization to delete (using org_id to match the passed id)
+      const org = organizations.find(o => o.org_id === id)
+      if (org) {
+        setOrgToDelete(org)
+        setDeleteOrgDialogOpen(true)
+      }
+    } else if (selectedSection === 'departments') {
+      // Find the department to delete (using id to match the passed id)
+      const dept = departments.find(d => d.id === id)
+      if (dept) {
+        setDeptToDelete(dept)
+        setDeleteDeptDialogOpen(true)
+      }
+    }
   }
+
+  const handleCloseRoleModal = () => {
+    setViewRoleModalOpen(false)
+    setSelectedRoleId(0)
+    setRoleFunctions([])
+    setCheckedFunctions({})
+  }
+
+  const handleCloseDeleteDialog = () => {
+    setDeleteDialogOpen(false)
+    setRoleToDelete(null)
+  }
+
+  const handleCloseOrgDeleteDialog = () => {
+    setDeleteOrgDialogOpen(false)
+    setOrgToDelete(null)
+  }
+
+  const handleCloseDeptDeleteDialog = () => {
+    setDeleteDeptDialogOpen(false)
+    setDeptToDelete(null)
+  }
+
+  const handleConfirmDelete = async () => {
+    if (!roleToDelete) return
+    
+    console.log('🗑️ DELETE ROLE STARTED')
+    console.log('🗑️ Deleting role:', roleToDelete)
+    
+    setIsLoading(true)
+    setError('')
+    
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL
+      if (!baseUrl) {
+        throw new Error('API base URL not configured')
+      }
+
+      // Get token from auth data
+      const authData = getAuthData()
+      const token = authData?.token
+      
+      if (!token) {
+        throw new Error('No authentication token found')
+      }
+
+      const requestUrl = `${baseUrl}/delete_role`
+      const requestBody = {
+        token: token,
+        id: roleToDelete.id,
+        security_id: roleToDelete.security_id
+      }
+
+      console.log('🗑️ Making delete_role API call to:', requestUrl)
+      console.log('🗑️ Request body:', { 
+        token: token.substring(0, 8) + '...', 
+        id: roleToDelete.id,
+        security_id: roleToDelete.security_id
+      })
+
+      const response = await fetch(requestUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody)
+      })
+
+      console.log('🗑️ Delete role API response status:', response.status)
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('Delete role API error response:', errorText)
+        throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`)
+      }
+
+      const responseData = await response.json()
+      console.log('🗑️ Delete role API response data:', responseData)
+
+      // Handle API response format: { "result": [true, false, []] }
+      if (responseData.result && Array.isArray(responseData.result) && responseData.result[0] === true) {
+        console.log('✅ Role deleted successfully')
+        
+        // Remove the deleted role from the local state
+        setRoles(prevRoles => prevRoles.filter(role => role.id !== roleToDelete.id))
+        
+        // Close the dialog
+        handleCloseDeleteDialog()
+        
+        // Optionally refresh the roles list from API
+        // fetchRoles()
+      } else {
+        console.log('❌ Unexpected response format or error:', responseData)
+        throw new Error('Failed to delete role - invalid response from server')
+      }
+
+    } catch (error) {
+      console.error('❌ Error deleting role:', error)
+      setError('Failed to delete role: ' + (error instanceof Error ? error.message : 'Unknown error'))
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleConfirmOrgDelete = async () => {
+    if (!orgToDelete) return
+    
+    console.log('🗑️ DELETE ORGANIZATION STARTED')
+    console.log('🗑️ Deleting organization:', orgToDelete)
+    
+    setIsLoading(true)
+    setError('')
+    
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL
+      if (!baseUrl) {
+        throw new Error('API base URL not configured')
+      }
+
+      // Get token from auth data
+      const authData = getAuthData()
+      const token = authData?.token
+      
+      if (!token) {
+        throw new Error('No authentication token found')
+      }
+
+      const requestUrl = `${baseUrl}/delete_org`
+      const requestBody = {
+        token: token,
+        id: orgToDelete.id  // Use the "id" field, not org_id
+      }
+
+      console.log('🗑️ Making delete_org API call to:', requestUrl)
+      console.log('🗑️ Request body:', { 
+        token: token.substring(0, 8) + '...', 
+        id: orgToDelete.id
+      })
+
+      const response = await fetch(requestUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody)
+      })
+
+      console.log('🗑️ Delete org API response status:', response.status)
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('Delete org API error response:', errorText)
+        throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`)
+      }
+
+      const responseData = await response.json()
+      console.log('🗑️ Delete org API response data:', responseData)
+
+      // Handle API response format: { "result": true }
+      if (responseData.result === true) {
+        console.log('✅ Organization deleted successfully')
+        
+        // Remove the deleted organization from the local state
+        setOrganizations(prevOrgs => prevOrgs.filter(org => org.id !== orgToDelete.id))
+        
+        // Close the dialog
+        handleCloseOrgDeleteDialog()
+      } else {
+        console.log('❌ Unexpected response format or error:', responseData)
+        throw new Error('Failed to delete organization - invalid response from server')
+      }
+
+    } catch (error) {
+      console.error('❌ Error deleting organization:', error)
+      setError('Failed to delete organization: ' + (error instanceof Error ? error.message : 'Unknown error'))
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleConfirmDeptDelete = async () => {
+    if (!deptToDelete) return
+    
+    console.log('🗑️ DELETE DEPARTMENT STARTED')
+    console.log('🗑️ Deleting department:', deptToDelete)
+    
+    setIsLoading(true)
+    setError('')
+    
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL
+      if (!baseUrl) {
+        throw new Error('API base URL not configured')
+      }
+
+      // Get token from auth data
+      const authData = getAuthData()
+      const token = authData?.token
+      
+      if (!token) {
+        throw new Error('No authentication token found')
+      }
+
+      const requestUrl = `${baseUrl}/delete_dept`
+      const requestBody = {
+        token: token,
+        id: deptToDelete.id,
+        dept_id: deptToDelete.dept_id,
+        org_id: deptToDelete.org_id
+      }
+
+      console.log('🗑️ Making delete_dept API call to:', requestUrl)
+      console.log('🗑️ Request body:', { 
+        token: token.substring(0, 8) + '...', 
+        id: deptToDelete.id,
+        dept_id: deptToDelete.dept_id,
+        org_id: deptToDelete.org_id
+      })
+
+      const response = await fetch(requestUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody)
+      })
+
+      console.log('🗑️ Delete dept API response status:', response.status)
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('Delete dept API error response:', errorText)
+        throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`)
+      }
+
+      const responseData = await response.json()
+      console.log('🗑️ Delete dept API response data:', responseData)
+
+      // Handle API response format: { "result": true }
+      if (responseData.result === true) {
+        console.log('✅ Department deleted successfully')
+        
+        // Remove the deleted department from the local state
+        setDepartments(prevDepts => prevDepts.filter(dept => dept.id !== deptToDelete.id))
+        
+        // Close the dialog
+        handleCloseDeptDeleteDialog()
+      } else {
+        console.log('❌ Unexpected response format or error:', responseData)
+        throw new Error('Failed to delete department - invalid response from server')
+      }
+
+    } catch (error) {
+      console.error('❌ Error deleting department:', error)
+      setError('Failed to delete department: ' + (error instanceof Error ? error.message : 'Unknown error'))
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleFunctionToggle = (functionId: number) => {
+    setCheckedFunctions(prev => ({
+      ...prev,
+      [functionId]: !prev[functionId]
+    }))
+  }
+
+  const handleSavePermissions = async () => {
+    console.log('🎭 SAVE ROLE PERMISSIONS STARTED')
+    console.log('🎭 Saving permissions for role:', selectedRoleId)
+    console.log('🎭 Checked functions:', checkedFunctions)
+    
+    setIsLoading(true)
+    setError('')
+    
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL
+      if (!baseUrl) {
+        throw new Error('API base URL not configured')
+      }
+
+      // Get token from auth data
+      const authData = getAuthData()
+      const token = authData?.token
+      
+      if (!token) {
+        throw new Error('No authentication token found')
+      }
+
+      // Prepare functions array with updated ticked status
+      // Since large integers are now preserved as strings from fetch, we can safely spread and update
+      const functionsWithUpdatedTicked = roleFunctions.map((func: any) => ({
+        ...func,
+        ticked: checkedFunctions[func.function_id] || false
+      }))
+
+      const requestUrl = `${baseUrl}/save_role_functions`
+      const requestBody = {
+        token: token,
+        role: selectedRoleId,
+        functions: functionsWithUpdatedTicked
+      }
+
+      console.log('🎭 Making save_role_functions API call to:', requestUrl)
+      console.log('🎭 Request body:', { 
+        token: token.substring(0, 8) + '...', 
+        role: selectedRoleId,
+        functions: `[${functionsWithUpdatedTicked.length} functions with updated ticked status]`
+      })
+      
+      // Debug: Log the exact org_id and dept_id values being sent
+      functionsWithUpdatedTicked.forEach((func, index) => {
+        if (func.org_id || func.dept_id) {
+          console.log(`🔍 Function ${index} - org_id: ${func.org_id} (type: ${typeof func.org_id}), dept_id: ${func.dept_id} (type: ${typeof func.dept_id})`)
+        }
+      })
+      
+      // Debug: Log the JSON string that will be sent (with preserved large integers)
+      const requestBodyString = JSON.stringify(requestBody, (key, value) => {
+        // Preserve org_id and dept_id as strings to maintain precision
+        if ((key === 'org_id' || key === 'dept_id') && typeof value === 'string') {
+          return value
+        }
+        return value
+      })
+      console.log('🎭 Request body as JSON string (first 1000 chars):', requestBodyString.substring(0, 1000))
+
+      const response = await fetch(requestUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody, (key, value) => {
+          // Preserve org_id and dept_id as strings to maintain precision
+          if ((key === 'org_id' || key === 'dept_id') && typeof value === 'string') {
+            return value
+          }
+          return value
+        })
+      })
+
+      console.log('🎭 Save permissions API response status:', response.status)
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('Save permissions API error response:', errorText)
+        throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`)
+      }
+
+      const responseData = await response.json()
+      console.log('🎭 Save permissions API response data:', responseData)
+
+      // Handle API response format: { "result": true }
+      if (responseData.result === true) {
+        console.log('✅ Role permissions saved successfully')
+        alert('Role permissions saved successfully!')
+        handleCloseRoleModal()
+      } else {
+        console.log('❌ Unexpected response format or error:', responseData)
+        throw new Error('Failed to save permissions - invalid response from server')
+      }
+
+    } catch (error) {
+      console.error('❌ Error saving role permissions:', error)
+      alert('Failed to save permissions: ' + (error instanceof Error ? error.message : 'Unknown error'))
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // Group functions by function_group_ui
+  const groupedFunctions = roleFunctions.reduce((acc: any, func: any) => {
+    const group = func.function_group_ui || 'Other'
+    if (!acc[group]) {
+      acc[group] = []
+    }
+    acc[group].push(func)
+    return acc
+  }, {})
 
   const handleRefresh = () => {
     console.log(`Refresh ${selectedSection}`)
@@ -724,9 +1314,11 @@ export default function ManageTab() {
                           <Chip label={org.status} color={getStatusColor(org.status) as any} size="small" />
                         </TableCell>
                         <TableCell align="right">
-                          <IconButton size="small" onClick={() => handleDelete(org.org_id)}>
-                            <Delete fontSize="small" />
-                          </IconButton>
+                          {org.org_type?.toLowerCase() !== 'root' && (
+                            <IconButton size="small" onClick={() => handleDelete(org.org_id)}>
+                              <Delete fontSize="small" />
+                            </IconButton>
+                          )}
                         </TableCell>
                       </TableRow>
                     ))
@@ -848,12 +1440,11 @@ export default function ManageTab() {
                           <Chip label={dept.status} color={getStatusColor(dept.status) as any} size="small" />
                         </TableCell>
                         <TableCell align="right">
-                          <IconButton size="small" onClick={() => handleEdit(dept.id)}>
-                            <Edit fontSize="small" />
-                          </IconButton>
-                          <IconButton size="small" onClick={() => handleDelete(dept.id)}>
-                            <Delete fontSize="small" />
-                          </IconButton>
+                          {dept.dept_type?.toLowerCase() !== 'root' && (
+                            <IconButton size="small" onClick={() => handleDelete(dept.id)}>
+                              <Delete fontSize="small" />
+                            </IconButton>
+                          )}
                         </TableCell>
                       </TableRow>
                     ))
@@ -906,12 +1497,16 @@ export default function ManageTab() {
                           <Chip label={role.status} color={getStatusColor(role.status) as any} size="small" />
                         </TableCell>
                         <TableCell align="right">
-                          <IconButton size="small" onClick={() => handleEdit(role.id)}>
-                            <Edit fontSize="small" />
-                          </IconButton>
-                          <IconButton size="small" onClick={() => handleDelete(role.id)}>
-                            <Delete fontSize="small" />
-                          </IconButton>
+                          {role.role_type?.toLowerCase() !== 'system' && (
+                            <>
+                              <IconButton size="small" onClick={() => handleViewRole(role.id)}>
+                                <Visibility fontSize="small" />
+                              </IconButton>
+                              <IconButton size="small" onClick={() => handleDelete(role.id)}>
+                                <Delete fontSize="small" />
+                              </IconButton>
+                            </>
+                          )}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -1178,6 +1773,358 @@ export default function ManageTab() {
               </Box>
             ) : (
               selectedSection === 'users' ? 'Add User' : 'Save'
+            )}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Role Permissions Modal */}
+      <Dialog
+        open={viewRoleModalOpen}
+        onClose={handleCloseRoleModal}
+        maxWidth="md"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 3,
+            p: 1,
+          }
+        }}
+      >
+        <DialogTitle sx={{ pb: 2 }}>
+          <Typography variant="h5" sx={{ fontWeight: 600 }}>
+            Role Permissions
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+            Select the permissions for this role
+          </Typography>
+        </DialogTitle>
+
+        <DialogContent sx={{ pb: 3 }}>
+          {Object.keys(groupedFunctions).map((groupName) => (
+            <Accordion key={groupName} sx={{ mb: 1 }}>
+              <AccordionSummary
+                expandIcon={<ExpandMore />}
+                sx={{ backgroundColor: 'grey.50' }}
+              >
+                <Typography variant="h6" sx={{ fontWeight: 500 }}>
+                  {groupName}
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ ml: 2 }}>
+                  ({groupedFunctions[groupName].length} functions)
+                </Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                <FormGroup>
+                  {groupedFunctions[groupName].map((func: any) => (
+                    <FormControlLabel
+                      key={func.function_id}
+                      control={
+                        <Checkbox
+                          checked={checkedFunctions[func.function_id] || false}
+                          onChange={() => handleFunctionToggle(func.function_id)}
+                        />
+                      }
+                      label={
+                        <Box>
+                          <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                            {func.name}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {func.description}
+                          </Typography>
+                        </Box>
+                      }
+                      sx={{ mb: 1, alignItems: 'flex-start' }}
+                    />
+                  ))}
+                </FormGroup>
+              </AccordionDetails>
+            </Accordion>
+          ))}
+        </DialogContent>
+
+        <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
+          <Button
+            onClick={handleCloseRoleModal}
+            variant="outlined"
+            sx={{
+              textTransform: 'none',
+              borderRadius: 2,
+              px: 3,
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleSavePermissions}
+            variant="contained"
+            disabled={isLoading}
+            sx={{
+              textTransform: 'none',
+              borderRadius: 2,
+              px: 3,
+            }}
+          >
+            {isLoading ? (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <CircularProgress size={16} color="inherit" />
+                Saving...
+              </Box>
+            ) : (
+              'Save Permissions'
+            )}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Delete Role Confirmation Dialog */}
+      <Dialog
+        open={deleteDialogOpen}
+        onClose={handleCloseDeleteDialog}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 3,
+            p: 1,
+          }
+        }}
+      >
+        <DialogTitle sx={{ pb: 2 }}>
+          <Typography variant="h6" sx={{ fontWeight: 600, color: 'error.main' }}>
+            Delete Role
+          </Typography>
+        </DialogTitle>
+        
+        <DialogContent sx={{ pb: 3 }}>
+          <Typography variant="body1" sx={{ mb: 2 }}>
+            Are you sure you want to delete this role?
+          </Typography>
+          {roleToDelete && (
+            <Box sx={{ 
+              p: 2, 
+              borderRadius: 2, 
+              backgroundColor: 'error.light', 
+              border: 1, 
+              borderColor: 'error.main',
+              mb: 2 
+            }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                {roleToDelete.name}
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                {roleToDelete.description}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                ID: {roleToDelete.id} | Security ID: {roleToDelete.security_id}
+              </Typography>
+            </Box>
+          )}
+          <Typography variant="body2" color="error.main" sx={{ fontWeight: 500 }}>
+            This action cannot be undone.
+          </Typography>
+        </DialogContent>
+        
+        <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
+          <Button
+            onClick={handleCloseDeleteDialog}
+            variant="outlined"
+            disabled={isLoading}
+            sx={{
+              textTransform: 'none',
+              borderRadius: 2,
+              px: 3,
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleConfirmDelete}
+            variant="contained"
+            color="error"
+            disabled={isLoading}
+            sx={{
+              textTransform: 'none',
+              borderRadius: 2,
+              px: 3,
+            }}
+          >
+            {isLoading ? (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <CircularProgress size={16} color="inherit" />
+                Deleting...
+              </Box>
+            ) : (
+              'Delete Role'
+            )}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Delete Organization Confirmation Dialog */}
+      <Dialog
+        open={deleteOrgDialogOpen}
+        onClose={handleCloseOrgDeleteDialog}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 3,
+            p: 1,
+          }
+        }}
+      >
+        <DialogTitle sx={{ pb: 2 }}>
+          <Typography variant="h6" sx={{ fontWeight: 600, color: 'error.main' }}>
+            Delete Organization
+          </Typography>
+        </DialogTitle>
+        
+        <DialogContent sx={{ pb: 3 }}>
+          <Typography variant="body1" sx={{ mb: 2 }}>
+            Are you sure you want to delete this organization?
+          </Typography>
+          {orgToDelete && (
+            <Box sx={{ 
+              p: 2, 
+              borderRadius: 2, 
+              backgroundColor: 'error.light', 
+              border: 1, 
+              borderColor: 'error.main',
+              mb: 2 
+            }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                {orgToDelete.name}
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                Owner: {orgToDelete.org_owner || 'N/A'}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                ID: {orgToDelete.id} | Org ID: {orgToDelete.org_id} | Type: {orgToDelete.org_type}
+              </Typography>
+            </Box>
+          )}
+          <Typography variant="body2" color="error.main" sx={{ fontWeight: 500 }}>
+            This action cannot be undone.
+          </Typography>
+        </DialogContent>
+        
+        <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
+          <Button
+            onClick={handleCloseOrgDeleteDialog}
+            variant="outlined"
+            disabled={isLoading}
+            sx={{
+              textTransform: 'none',
+              borderRadius: 2,
+              px: 3,
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleConfirmOrgDelete}
+            variant="contained"
+            color="error"
+            disabled={isLoading}
+            sx={{
+              textTransform: 'none',
+              borderRadius: 2,
+              px: 3,
+            }}
+          >
+            {isLoading ? (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <CircularProgress size={16} color="inherit" />
+                Deleting...
+              </Box>
+            ) : (
+              'Delete Organization'
+            )}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Delete Department Confirmation Dialog */}
+      <Dialog
+        open={deleteDeptDialogOpen}
+        onClose={handleCloseDeptDeleteDialog}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 3,
+            p: 1,
+          }
+        }}
+      >
+        <DialogTitle sx={{ pb: 2 }}>
+          <Typography variant="h6" sx={{ fontWeight: 600, color: 'error.main' }}>
+            Delete Department
+          </Typography>
+        </DialogTitle>
+        
+        <DialogContent sx={{ pb: 3 }}>
+          <Typography variant="body1" sx={{ mb: 2 }}>
+            Are you sure you want to delete this department?
+          </Typography>
+          {deptToDelete && (
+            <Box sx={{ 
+              p: 2, 
+              borderRadius: 2, 
+              backgroundColor: 'error.light', 
+              border: 1, 
+              borderColor: 'error.main',
+              mb: 2 
+            }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                {deptToDelete.name}
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                Type: {deptToDelete.dept_type} | Status: {deptToDelete.status}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                ID: {deptToDelete.id} | Dept ID: {deptToDelete.dept_id} | Org ID: {deptToDelete.org_id}
+              </Typography>
+            </Box>
+          )}
+          <Typography variant="body2" color="error.main" sx={{ fontWeight: 500 }}>
+            This action cannot be undone.
+          </Typography>
+        </DialogContent>
+        
+        <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
+          <Button
+            onClick={handleCloseDeptDeleteDialog}
+            variant="outlined"
+            disabled={isLoading}
+            sx={{
+              textTransform: 'none',
+              borderRadius: 2,
+              px: 3,
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleConfirmDeptDelete}
+            variant="contained"
+            color="error"
+            disabled={isLoading}
+            sx={{
+              textTransform: 'none',
+              borderRadius: 2,
+              px: 3,
+            }}
+          >
+            {isLoading ? (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <CircularProgress size={16} color="inherit" />
+                Deleting...
+              </Box>
+            ) : (
+              'Delete Department'
             )}
           </Button>
         </DialogActions>
